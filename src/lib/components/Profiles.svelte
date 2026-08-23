@@ -153,6 +153,7 @@
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    box-shadow: var(--shadow);
   }
 
   .list {
@@ -182,6 +183,12 @@
     align-items: center;
     gap: 12px;
     padding: 14px 16px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .item:hover {
+    transform: translateY(-1px);
+    border-color: var(--border-strong);
   }
 
   .item-main {

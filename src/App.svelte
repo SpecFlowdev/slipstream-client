@@ -9,16 +9,16 @@
   import { setLanguage, t } from "./lib/i18n.svelte";
   import { blankProfile, EMPTY_STATUS, type LogLine, type Profile, type Settings as Prefs, type Status } from "./lib/types";
 
-  const VERSION = "0.1.4";
+  const VERSION = "0.1.5";
   const SAMPLES = 60;
 
   type Tab = "connection" | "servers" | "logs" | "settings";
 
   const TABS = [
-    { id: "connection", label: "nav.connection", glyph: "◈" },
-    { id: "servers", label: "nav.servers", glyph: "▤" },
-    { id: "logs", label: "nav.logs", glyph: "≡" },
-    { id: "settings", label: "nav.settings", glyph: "⚙" },
+    { id: "connection", label: "nav.connection" },
+    { id: "servers", label: "nav.servers" },
+    { id: "logs", label: "nav.logs" },
+    { id: "settings", label: "nav.settings" },
   ] as const;
 
   let tab = $state<Tab>("connection");
@@ -154,7 +154,22 @@
     <nav>
       {#each TABS as item (item.id)}
         <button class="nav" class:active={tab === item.id} onclick={() => (tab = item.id)}>
-          <span class="glyph">{item.glyph}</span>
+          {#if tab === item.id}<span class="nav-bar"></span>{/if}
+          <svg class="glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            {#if item.id === "connection"}
+              <path d="M2.5 11h3l1.6-4.5 2.6 8 1.8-6 1.4 2.5h4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            {:else if item.id === "servers"}
+              <rect x="3" y="3.5" width="14" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.5" />
+              <rect x="3" y="11" width="14" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.5" />
+              <circle cx="6.3" cy="6.25" r="1" fill="currentColor" />
+              <circle cx="6.3" cy="13.75" r="1" fill="currentColor" />
+            {:else if item.id === "logs"}
+              <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            {:else}
+              <circle cx="10" cy="10" r="2.4" stroke="currentColor" stroke-width="1.5" />
+              <path d="M10 3.2v2M10 14.8v2M16.8 10h-2M5.2 10h-2M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4M15.1 15.1l-1.4-1.4M6.3 6.3L4.9 4.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            {/if}
+          </svg>
           <span>{t(item.label)}</span>
         </button>
       {/each}
@@ -245,6 +260,7 @@
   }
 
   .nav {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -266,10 +282,21 @@
     color: var(--accent);
   }
 
+  .nav-bar {
+    position: absolute;
+    left: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 18px;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, var(--accent), var(--success));
+  }
+
   .glyph {
     width: 16px;
-    text-align: center;
-    font-size: 13px;
+    height: 16px;
+    flex: none;
   }
 
   .foot {

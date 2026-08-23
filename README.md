@@ -56,11 +56,11 @@ Set up the other end with the [server installer](https://github.com/SpecFlowdev/
 
 ## Features
 
-- **Server profiles** — domain, resolver, pinned certificate, local port and proxy credentials, stored per server
-- **Live statistics** — download and upload rates graphed over the last minute, session totals, open connection count and uptime
+- **Server profiles** — domain, resolver, pinned certificate, local port and proxy credentials, stored per server. Paste a certificate's contents directly, or pick the file — either way it's pinned
+- **Live statistics** — download and upload rates as smoothed, glowing graphs over the last minute, session totals, open connection count and uptime
 - **Log viewer** — the tunnel's own output, filtered by level, with follow-the-tail
-- **Runs in the tray** — closing the window leaves the tunnel up; connect on launch is optional
-- **Dark gray, blue or light theme, English and Russian** — follows the system or pins any of the three; the dark gray theme takes a custom wallpaper, shown behind frosted panels
+- **Runs in the tray on Windows** — closing the window leaves the tunnel up; connect on launch is optional. On Linux, closing the window quits: the system tray backend the app would otherwise use is known to crash on some Wayland desktops, so it's not built there at all
+- **Dark gray, blue or light theme, English and Russian** — follows the system or pins any of the three; the dark gray theme takes a custom wallpaper, shown behind frosted glass panels
 - **Kill switch** — refuses new connections and drops active ones on this app's own SOCKS5 port while the tunnel is down, so it fails closed instead of quietly hanging. Scoped to this app's port, not the whole system — that needs the TUN-based routing on the roadmap
 - **Nothing leaves the device** — profiles, certificates and credentials live in your config directory only
 
@@ -71,19 +71,27 @@ Set up the other end with the [server installer](https://github.com/SpecFlowdev/
 <table>
   <tr>
     <td width="50%"><img src="assets/screenshot-servers.png" alt="Servers"></td>
-    <td width="50%"><img src="assets/screenshot-logs.png" alt="Logs"></td>
+    <td width="50%"><img src="assets/screenshot-settings.png" alt="Settings"></td>
   </tr>
   <tr>
     <td align="center"><strong>Servers</strong> — profiles and the editor</td>
-    <td align="center"><strong>Logs</strong> — tunnel output by level</td>
+    <td align="center"><strong>Settings</strong> — kill switch, theme and wallpaper</td>
   </tr>
   <tr>
+    <td width="50%"><img src="assets/screenshot-logs.png" alt="Logs"></td>
     <td width="50%"><img src="assets/screenshot-light.png" alt="Light theme"></td>
-    <td width="50%"><img src="assets/screenshot-ru.png" alt="Russian interface"></td>
   </tr>
   <tr>
+    <td align="center"><strong>Logs</strong> — tunnel output by level</td>
     <td align="center"><strong>Light theme</strong> — or follow the system</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshot-ru.png" alt="Russian interface"></td>
+    <td width="50%"><img src="assets/screenshot-connection.png" alt="Blue theme"></td>
+  </tr>
+  <tr>
     <td align="center"><strong>Russian</strong> — switched in settings</td>
+    <td align="center"><strong>Blue theme</strong> — the third option</td>
   </tr>
 </table>
 

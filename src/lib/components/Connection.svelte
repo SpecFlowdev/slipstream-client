@@ -45,7 +45,13 @@
 <div class="wrap">
   {#if profiles.length === 0}
     <div class="empty">
-      <div class="empty-icon">◇</div>
+      <svg class="empty-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <rect x="9" y="10" width="30" height="11" rx="3.5" stroke="currentColor" stroke-width="1.6" opacity="0.7" />
+        <rect x="9" y="27" width="30" height="11" rx="3.5" stroke="currentColor" stroke-width="1.6" opacity="0.35" />
+        <circle cx="16" cy="15.5" r="1.6" fill="currentColor" opacity="0.7" />
+        <circle cx="16" cy="32.5" r="1.6" fill="currentColor" opacity="0.35" />
+        <path d="M22 15.5h11M22 32.5h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.5" />
+      </svg>
       <h2>{t("conn.emptyTitle")}</h2>
       <p>{t("conn.emptyBody")}</p>
       <button class="primary" onclick={onNewProfile}>{t("conn.addServer")}</button>
@@ -102,18 +108,28 @@
     </section>
 
     <section class="meters">
-      <div class="card meter">
+      <div class="card meter" data-dir="down">
         <div class="meter-head">
-          <span class="meter-name">{t("conn.download")}</span>
+          <span class="meter-name">
+            <svg class="meter-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2.5v9M4 8l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            {t("conn.download")}
+          </span>
           <span class="meter-rate down">{rate(status.rateDown)}</span>
         </div>
         <Sparkline samples={downSamples} color="var(--accent)" />
         <span class="meter-total">{bytes(status.bytesDown)} {t("conn.total")}</span>
       </div>
 
-      <div class="card meter">
+      <div class="card meter" data-dir="up">
         <div class="meter-head">
-          <span class="meter-name">{t("conn.upload")}</span>
+          <span class="meter-name">
+            <svg class="meter-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 13.5v-9M4 8l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            {t("conn.upload")}
+          </span>
           <span class="meter-rate up">{rate(status.rateUp)}</span>
         </div>
         <Sparkline samples={upSamples} color="var(--success)" />
@@ -150,6 +166,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 18px;
+    box-shadow: var(--shadow);
   }
 
   .status-card {
@@ -169,7 +186,13 @@
   }
 
   .status-card[data-state="connected"]::before {
-    background: linear-gradient(90deg, var(--accent), var(--success));
+    background: linear-gradient(90deg, var(--accent), var(--success), var(--accent));
+    background-size: 200% 100%;
+    animation: shimmer 5s linear infinite;
+  }
+
+  @keyframes shimmer {
+    to { background-position: -200% 0; }
   }
 
   .status-card[data-state="error"]::before {
@@ -193,6 +216,12 @@
   .dot[data-state="connected"] {
     background: var(--success);
     box-shadow: 0 0 0 4px var(--success-soft);
+    animation: breathe 2.6s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 4px var(--success-soft); }
+    50% { box-shadow: 0 0 0 7px var(--success-soft); }
   }
 
   .dot[data-state="starting"],
@@ -239,6 +268,17 @@
     color: var(--text-faint);
   }
 
+  .meter-name {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .meter-icon {
+    width: 12px;
+    height: 12px;
+  }
+
   .endpoint {
     display: flex;
     align-items: center;
@@ -268,11 +308,18 @@
     font-weight: 650;
     padding: 11px;
     border-radius: var(--radius-sm);
-    transition: filter 0.15s, opacity 0.15s;
+    box-shadow: 0 4px 18px -4px var(--accent-soft);
+    transition: filter 0.15s, opacity 0.15s, box-shadow 0.2s, transform 0.15s;
   }
 
   .primary:hover:not(:disabled) {
     filter: brightness(1.08);
+    box-shadow: 0 6px 22px -4px var(--accent-soft);
+    transform: translateY(-1px);
+  }
+
+  .primary:active:not(:disabled) {
+    transform: translateY(0);
   }
 
   .primary:disabled {
@@ -311,6 +358,12 @@
     flex-direction: column;
     gap: 8px;
     padding: 14px 16px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .meter:hover {
+    transform: translateY(-1px);
+    border-color: var(--border-strong);
   }
 
   .meter-head {
@@ -348,7 +401,8 @@
 
   .fact-value {
     font-family: var(--mono);
-    font-size: 15px;
+    font-size: 16px;
+    font-weight: 600;
   }
 
   .empty {
@@ -362,8 +416,10 @@
   }
 
   .empty-icon {
-    font-size: 34px;
+    width: 48px;
+    height: 48px;
     color: var(--accent);
+    filter: drop-shadow(0 0 14px var(--accent-soft));
   }
 
   .empty h2 {

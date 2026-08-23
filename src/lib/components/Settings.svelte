@@ -19,12 +19,21 @@
     onChange({ ...settings, [key]: !settings[key] });
   }
 
-  const switches = [
-    { key: "connectOnLaunch", title: "settings.connectOnLaunch", sub: "settings.connectOnLaunchSub" },
-    { key: "autoReconnect", title: "settings.autoReconnect", sub: "settings.autoReconnectSub" },
-    { key: "minimiseToTray", title: "settings.tray", sub: "settings.traySub" },
-    { key: "killSwitch", title: "settings.killSwitch", sub: "settings.killSwitchSub" },
-  ] as const;
+  // There is no tray icon on Linux at all (see src-tauri/src/lib.rs) — the
+  // one used elsewhere fatally crashes the app on some Wayland sessions, so
+  // it's never built there. The toggle would do nothing if shown, so it's
+  // left out rather than left there lying about what closing the window does.
+  const isLinux =
+    typeof navigator !== "undefined" && /linux/i.test(navigator.userAgent) && !/android/i.test(navigator.userAgent);
+
+  const switches = (
+    [
+      { key: "connectOnLaunch", title: "settings.connectOnLaunch", sub: "settings.connectOnLaunchSub" },
+      { key: "autoReconnect", title: "settings.autoReconnect", sub: "settings.autoReconnectSub" },
+      { key: "minimiseToTray", title: "settings.tray", sub: "settings.traySub" },
+      { key: "killSwitch", title: "settings.killSwitch", sub: "settings.killSwitchSub" },
+    ] as const
+  ).filter((row) => row.key !== "minimiseToTray" || !isLinux);
 
   let wallpaperPreview = $derived(
     settings.wallpaperPath ? convertFileSrc(settings.wallpaperPath) : null,
@@ -145,6 +154,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 6px 18px 14px;
+    box-shadow: var(--shadow);
   }
 
   h2 {

@@ -176,20 +176,25 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Whether it's safe to build the tray icon on this Linux session.
+/// Whether it's safe to build the tray icon on this platform.
 ///
-/// The tray icon (libayatana-appindicator) fatally crashes the process on
-/// native Wayland — GDK aborts at the C level before any Rust code can catch
-/// it. `main.rs` steers GDK through X11/XWayland to avoid that, which works
-/// as long as an X server is actually reachable. On a session with no
-/// XWayland at all there is nowhere for GDK to go but native Wayland, so
-/// skip the tray there instead of taking the whole app down with it — no
-/// X11 `DISPLAY` means no X server, which `DISPLAY` is always set to when
-/// XWayland is available (it's what lets ordinary X11 apps run under
-/// Wayland in the first place).
+/// On Linux the tray icon (libayatana-appindicator) fatally crashes the
+/// process on native Wayland — GDK aborts at the C level before any Rust
+/// code can catch it, so there is no panic to recover from, just a dead
+/// process a second after launch. `main.rs` steers GDK through X11/XWayland
+/// to dodge it, which helps but isn't a guarantee: some Wayland desktop
+/// sessions still leave the app on native Wayland regardless (no XWayland
+/// installed at all, or something in that session overriding the backend
+/// choice again after main.rs sets it), and this exact crash kept coming
+/// back on user reports across several attempts at that route. Rather than
+/// keep chasing backend-negotiation edge cases, Linux never builds the tray
+/// at all: libayatana-appindicator is never touched, so it has nothing to
+/// crash on, on any desktop. Closing the window quits the app instead of
+/// minimising to a tray that doesn't exist (see the `TrayAvailable` check
+/// below), which is the one user-visible trade-off.
 #[cfg(target_os = "linux")]
 fn tray_is_safe_here() -> bool {
-    std::env::var_os("DISPLAY").is_some()
+    false
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -230,9 +235,7 @@ pub fn run() {
                     }
                 }
             } else {
-                eprintln!(
-                    "no X11 display available; skipping the tray icon to avoid a Wayland crash"
-                );
+                eprintln!("skipping the tray icon on this platform to avoid the Wayland crash");
                 false
             };
             app.manage(TrayAvailable(tray_built));
