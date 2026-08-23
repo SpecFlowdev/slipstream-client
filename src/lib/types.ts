@@ -54,7 +54,7 @@ export interface Settings {
   connectOnLaunch: boolean;
   /** Keep running in the tray when the window is closed. */
   minimiseToTray: boolean;
-  theme: "system" | "dark" | "light";
+  theme: "system" | "dark" | "light" | "blue";
   language: "system" | "en" | "ru";
   /**
    * Refuses new SOCKS5 connections and drops active ones while the tunnel is

@@ -72,12 +72,19 @@ fn read_cert_file(path: String) -> Result<String, String> {
 
 const WALLPAPER_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "bmp"];
 
-/// Copies the chosen image into the app's config directory as `wallpaper.<ext>`
-/// and returns that path, so the frontend can hand it to Tauri's asset
-/// protocol. Storing a copy (like `read_cert_file` does for certificates)
-/// means a later launch does not depend on the original file still being
-/// where the user picked it from, and avoids putting the image bytes into the
-/// JSON settings file.
+/// Copies the chosen image into the app's config directory and returns that
+/// path, so the frontend can hand it to Tauri's asset protocol. Storing a
+/// copy (like `read_cert_file` does for certificates) means a later launch
+/// does not depend on the original file still being where the user picked it
+/// from, and avoids putting the image bytes into the JSON settings file.
+///
+/// The filename includes the current time rather than being the fixed
+/// `wallpaper.<ext>` it used to be: picking a second image with the same
+/// extension as the first produced the exact same path both times, and the
+/// asset protocol's response for that path was cached by the WebView, so the
+/// new image never actually appeared — the app kept showing the first one
+/// picked. A path that changes on every pick can't be served from a stale
+/// cache entry.
 #[tauri::command]
 fn set_wallpaper(app: AppHandle, path: String) -> Result<String, String> {
     let source = std::path::Path::new(&path);
@@ -92,7 +99,11 @@ fn set_wallpaper(app: AppHandle, path: String) -> Result<String, String> {
     std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
     clear_wallpaper_files(&dir)?;
 
-    let dest = dir.join(format!("wallpaper.{ext}"));
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let dest = dir.join(format!("wallpaper-{stamp}.{ext}"));
     std::fs::copy(source, &dest).map_err(|err| err.to_string())?;
     Ok(dest.to_string_lossy().to_string())
 }
@@ -109,7 +120,10 @@ fn clear_wallpaper_files(dir: &std::path::Path) -> Result<(), String> {
     };
     for entry in entries.flatten() {
         let name = entry.file_name();
-        if name.to_string_lossy().starts_with("wallpaper.") {
+        // "wallpaper" without the trailing dot also matches the old
+        // `wallpaper.<ext>` naming, so upgrading from an earlier version
+        // still cleans up its file.
+        if name.to_string_lossy().starts_with("wallpaper") {
             let _ = std::fs::remove_file(entry.path());
         }
     }
@@ -162,6 +176,33 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Whether it's safe to build the tray icon on this Linux session.
+///
+/// The tray icon (libayatana-appindicator) fatally crashes the process on
+/// native Wayland — GDK aborts at the C level before any Rust code can catch
+/// it. `main.rs` steers GDK through X11/XWayland to avoid that, which works
+/// as long as an X server is actually reachable. On a session with no
+/// XWayland at all there is nowhere for GDK to go but native Wayland, so
+/// skip the tray there instead of taking the whole app down with it — no
+/// X11 `DISPLAY` means no X server, which `DISPLAY` is always set to when
+/// XWayland is available (it's what lets ordinary X11 apps run under
+/// Wayland in the first place).
+#[cfg(target_os = "linux")]
+fn tray_is_safe_here() -> bool {
+    std::env::var_os("DISPLAY").is_some()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn tray_is_safe_here() -> bool {
+    true
+}
+
+/// Whether `build_tray` actually succeeded this run. Hiding the window on
+/// close instead of quitting only makes sense when there's a tray icon left
+/// to bring it back with; without one that would stop the app dead with no
+/// way to reach it again.
+struct TrayAvailable(bool);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -180,7 +221,21 @@ pub fn run() {
             app.manage(store.clone());
             app.manage(tunnel_state);
 
-            build_tray(app.handle())?;
+            let tray_built = if tray_is_safe_here() {
+                match build_tray(app.handle()) {
+                    Ok(()) => true,
+                    Err(err) => {
+                        eprintln!("tray icon unavailable, continuing without it: {err}");
+                        false
+                    }
+                }
+            } else {
+                eprintln!(
+                    "no X11 display available; skipping the tray icon to avoid a Wayland crash"
+                );
+                false
+            };
+            app.manage(TrayAvailable(tray_built));
 
             if store.settings().connect_on_launch {
                 if let Some(id) = store.last_profile() {
@@ -196,8 +251,10 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let store = window.app_handle().state::<Arc<Store>>();
-                if store.settings().minimise_to_tray {
+                let app = window.app_handle();
+                let store = app.state::<Arc<Store>>();
+                let tray_available = app.state::<TrayAvailable>().0;
+                if store.settings().minimise_to_tray && tray_available {
                     // Keep the tunnel up; the window is only the front end.
                     api.prevent_close();
                     let _ = window.hide();

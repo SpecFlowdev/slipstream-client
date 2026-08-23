@@ -9,7 +9,7 @@
   import { setLanguage, t } from "./lib/i18n.svelte";
   import { blankProfile, EMPTY_STATUS, type LogLine, type Profile, type Settings as Prefs, type Status } from "./lib/types";
 
-  const VERSION = "0.1.0";
+  const VERSION = "0.1.4";
   const SAMPLES = 60;
 
   type Tab = "connection" | "servers" | "logs" | "settings";

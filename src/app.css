@@ -26,6 +26,22 @@
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* The original navy theme, kept as a third explicit choice alongside the
+   dark gray default and the light theme. */
+:root[data-theme="blue"] {
+  --bg: #0b1220;
+  --bg-elevated: #111b2e;
+  --bg-inset: #0d1526;
+  --border: #1e2c45;
+  --border-strong: #2a3c5c;
+
+  --text: #e8f1f8;
+  --text-muted: #8ba3bd;
+  --text-faint: #5d7590;
+
+  --accent-soft: rgba(56, 189, 248, 0.12);
+}
+
 :root[data-theme="light"] {
   --bg: #f4f7fb;
   --bg-elevated: #ffffff;
