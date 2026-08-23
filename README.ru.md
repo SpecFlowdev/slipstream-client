@@ -20,7 +20,7 @@ Linux · Windows
 ---
 
 <div align="center">
-  <img src="assets/screenshot-traffic.png" alt="Панель трафика" width="100%">
+  <img src="assets/screenshot-wallpaper.png" alt="Панель трафика" width="100%">
 </div>
 
 ---
@@ -102,11 +102,11 @@ sha256sum -c slipstream-client-0.1.6-linux-x86_64.deb.sha256
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screenshot-wallpaper.png" alt="Обои"></td>
+    <td width="50%"><img src="assets/screenshot-wallpaper-light.png" alt="Обои в светлой теме"></td>
     <td width="50%"><img src="assets/screenshot-light.png" alt="Светлая тема"></td>
   </tr>
   <tr>
-    <td align="center"><strong>Обои</strong> — матовое стекло, затемнение и размытие по вкусу</td>
+    <td align="center"><strong>Обои</strong> — в любой теме, затемнение и размытие по вкусу</td>
     <td align="center"><strong>Светлая тема</strong> — или синяя, или как в системе</td>
   </tr>
   <tr>

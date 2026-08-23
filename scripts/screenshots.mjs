@@ -232,11 +232,17 @@ const shot = (page, name) => page.screenshot({ path: path.join(out, `${name}.png
   await page.close();
 }
 
-// A wallpaper behind the frosted panels.
-{
-  const page = await session({ theme: "dark", wallpaper: WALLPAPER });
+// A wallpaper behind the frosted panels. Captured in both a dark theme and
+// the light one: the light theme uses pale glass rather than dark, and
+// showing both is what makes "works in any theme" a claim the page backs up
+// rather than just asserts.
+for (const [theme, name] of [
+  ["dark", "screenshot-wallpaper"],
+  ["light", "screenshot-wallpaper-light"],
+]) {
+  const page = await session({ theme, wallpaper: WALLPAPER });
   await tab(page, "Traffic");
-  await shot(page, "screenshot-wallpaper");
+  await shot(page, name);
   await page.close();
 }
 

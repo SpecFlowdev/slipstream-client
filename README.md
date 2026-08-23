@@ -20,7 +20,7 @@ Linux · Windows
 ---
 
 <div align="center">
-  <img src="assets/screenshot-traffic.png" alt="Traffic dashboard" width="100%">
+  <img src="assets/screenshot-wallpaper.png" alt="Traffic dashboard" width="100%">
 </div>
 
 ---
@@ -102,11 +102,11 @@ Values are validated against what the binary actually accepts, so a bad setting 
 
 <table>
   <tr>
-    <td width="50%"><img src="assets/screenshot-wallpaper.png" alt="Wallpaper"></td>
+    <td width="50%"><img src="assets/screenshot-wallpaper-light.png" alt="Wallpaper on the light theme"></td>
     <td width="50%"><img src="assets/screenshot-light.png" alt="Light theme"></td>
   </tr>
   <tr>
-    <td align="center"><strong>Wallpaper</strong> — frosted glass, dimmed and blurred to taste</td>
+    <td align="center"><strong>Wallpaper</strong> — any theme, dimmed and blurred to taste</td>
     <td align="center"><strong>Light theme</strong> — or blue, or follow the system</td>
   </tr>
   <tr>
