@@ -20,7 +20,7 @@ Linux · Windows
 ---
 
 <div align="center">
-  <img src="assets/screenshot-traffic.png" alt="Панель трафика" width="94%">
+  <img src="assets/screenshot-traffic.png" alt="Панель трафика" width="100%">
 </div>
 
 ---
@@ -87,7 +87,7 @@ sha256sum -c slipstream-client-0.1.6-linux-x86_64.deb.sha256
 Значения проверяются на то, что бинарник действительно принимает, поэтому неверная настройка отклоняется при сохранении, а не превращается в туннель, который не стартует.
 
 <div align="center">
-  <img src="assets/screenshot-tuning.png" alt="Настройки производительности" width="82%">
+  <img src="assets/screenshot-tuning.png" alt="Настройки производительности" width="100%">
 </div>
 
 ### Всё остальное

@@ -20,7 +20,7 @@ Linux · Windows
 ---
 
 <div align="center">
-  <img src="assets/screenshot-traffic.png" alt="Traffic dashboard" width="94%">
+  <img src="assets/screenshot-traffic.png" alt="Traffic dashboard" width="100%">
 </div>
 
 ---
@@ -87,7 +87,7 @@ The performance controls are the tunnel binary's own flags, not decoration:
 Values are validated against what the binary actually accepts, so a bad setting is refused when you save it rather than becoming a tunnel that will not start.
 
 <div align="center">
-  <img src="assets/screenshot-tuning.png" alt="Performance settings" width="82%">
+  <img src="assets/screenshot-tuning.png" alt="Performance settings" width="100%">
 </div>
 
 ### Everything else
