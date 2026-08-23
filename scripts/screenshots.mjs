@@ -112,15 +112,38 @@ const LOGS = [
   seq: i + 1, ts: Date.now() - (7 - i) * 6000, level, message,
 }));
 
-// A bright, busy wallpaper: the hard case the dim and blur controls exist for.
+// Built from the banner's own palette — the same navy base and the same
+// blue-to-teal accent — so the README reads as one piece from the banner
+// down into the screenshot under it rather than changing colour halfway.
 const WALLPAPER = `data:image/svg+xml,${encodeURIComponent(`
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000">
- <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-  <stop offset="0%" stop-color="#1b3a6b"/><stop offset="50%" stop-color="#7b4bb8"/>
-  <stop offset="100%" stop-color="#22d3a8"/></linearGradient></defs>
- <rect width="1600" height="1000" fill="url(#g)"/>
- ${Array.from({ length: 46 }, (_, i) =>
-   `<circle cx="${(i * 173) % 1600}" cy="${(i * 251) % 1000}" r="${40 + (i % 6) * 26}" fill="#fff" opacity="0.13"/>`).join("")}
+ <defs>
+  <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
+   <stop offset="0%" stop-color="#0a1220"/>
+   <stop offset="55%" stop-color="#0d1b2e"/>
+   <stop offset="100%" stop-color="#071019"/>
+  </linearGradient>
+  <radialGradient id="glowA" cx="22%" cy="26%" r="52%">
+   <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.30"/>
+   <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="glowB" cx="80%" cy="76%" r="50%">
+   <stop offset="0%" stop-color="#22d3a8" stop-opacity="0.22"/>
+   <stop offset="100%" stop-color="#22d3a8" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="streak" x1="0" y1="0" x2="1" y2="0">
+   <stop offset="0%" stop-color="#38bdf8" stop-opacity="0"/>
+   <stop offset="45%" stop-color="#38bdf8" stop-opacity="0.5"/>
+   <stop offset="100%" stop-color="#22d3a8" stop-opacity="0"/>
+  </linearGradient>
+ </defs>
+ <rect width="1600" height="1000" fill="url(#base)"/>
+ <rect width="1600" height="1000" fill="url(#glowA)"/>
+ <rect width="1600" height="1000" fill="url(#glowB)"/>
+ ${Array.from({ length: 9 }, (_, i) =>
+   `<rect x="0" y="${90 + i * 102}" width="1600" height="${i % 3 === 0 ? 2 : 1}" fill="url(#streak)" opacity="${0.5 - (i % 4) * 0.09}"/>`).join("")}
+ ${Array.from({ length: 22 }, (_, i) =>
+   `<rect x="${(i * 271) % 1500}" y="${88 + ((i * 307) % 830)}" width="${20 + (i % 5) * 14}" height="5" rx="2.5" fill="${i % 3 ? "#38bdf8" : "#22d3a8"}" opacity="${0.5 - (i % 5) * 0.07}"/>`).join("")}
 </svg>`)}`;
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
@@ -236,11 +259,18 @@ const shot = (page, name) => page.screenshot({ path: path.join(out, `${name}.png
 // the light one: the light theme uses pale glass rather than dark, and
 // showing both is what makes "works in any theme" a claim the page backs up
 // rather than just asserts.
-for (const [theme, name] of [
-  ["dark", "screenshot-wallpaper"],
-  ["light", "screenshot-wallpaper-light"],
+// The lead image pairs the navy wallpaper with the blue theme, whose panels
+// are navy-tinted too, so it carries the banner's colour all the way down.
+// The wallpaper is already dark, so it needs far less dimming than a photo
+// would; the light capture keeps the heavier veil it does need.
+for (const [theme, name, dim, blur] of [
+  ["blue", "screenshot-wallpaper", 28, 10],
+  // The light theme's veil is white, so a heavy one on a dark wallpaper
+  // just turns it grey and the colour is lost entirely. Light glass over
+  // dark navy needs very little of it.
+  ["light", "screenshot-wallpaper-light", 22, 12],
 ]) {
-  const page = await session({ theme, wallpaper: WALLPAPER });
+  const page = await session({ theme, wallpaper: WALLPAPER, dim, blur });
   await tab(page, "Traffic");
   await shot(page, name);
   await page.close();
