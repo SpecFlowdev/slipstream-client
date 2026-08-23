@@ -97,7 +97,7 @@ Values are validated against what the binary actually accepts, so a bad setting 
 - **System proxy** — optionally points this computer's own proxy setting at the tunnel while connected and restores it on disconnect, so applications need no setup of their own *(see the note on TUN below)*
 - **Log viewer** — the tunnel's own output, filtered by level, with follow-the-tail
 - **Three themes and two languages** — dark gray, blue or light, English or Russian, each following the system or pinned
-- **Custom wallpaper** — in any theme, with dim and blur controls so the interface stays readable over any image
+- **Custom wallpaper** — any image, in any theme, with dim and blur controls so the interface stays readable over it. The shots below are generated ones; drop your own into `assets/wallpapers/` and `scripts/screenshots.mjs` will capture the panel with it
 - **Nothing leaves the device** — profiles, certificates, credentials and the traffic record live on your machine only
 
 <table>
@@ -108,6 +108,14 @@ Values are validated against what the binary actually accepts, so a bad setting 
   <tr>
     <td align="center"><strong>Wallpaper</strong> — any theme, dimmed and blurred to taste</td>
     <td align="center"><strong>Light theme</strong> — or blue, or follow the system</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshot-wallpaper-sunset.png" alt="A bright wallpaper"></td>
+    <td width="50%"><img src="assets/screenshot-wallpaper-aurora.png" alt="A dark wallpaper"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>A bright image</strong> — dimmed and blurred hard so text still wins</td>
+    <td align="center"><strong>A dark one</strong> — needs almost no dimming at all</td>
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshot-servers.png" alt="Servers"></td>

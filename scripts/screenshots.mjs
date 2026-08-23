@@ -10,7 +10,7 @@
 // Requires a static server for dist/ on PORT (started here automatically).
 
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -112,10 +112,12 @@ const LOGS = [
   seq: i + 1, ts: Date.now() - (7 - i) * 6000, level, message,
 }));
 
+const svgUrl = (body) => `data:image/svg+xml,${encodeURIComponent(body)}`;
+
 // Built from the banner's own palette — the same navy base and the same
 // blue-to-teal accent — so the README reads as one piece from the banner
 // down into the screenshot under it rather than changing colour halfway.
-const WALLPAPER = `data:image/svg+xml,${encodeURIComponent(`
+const WALLPAPER = svgUrl(`
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000">
  <defs>
   <linearGradient id="base" x1="0" y1="0" x2="1" y2="1">
@@ -144,7 +146,70 @@ const WALLPAPER = `data:image/svg+xml,${encodeURIComponent(`
    `<rect x="0" y="${90 + i * 102}" width="1600" height="${i % 3 === 0 ? 2 : 1}" fill="url(#streak)" opacity="${0.5 - (i % 4) * 0.09}"/>`).join("")}
  ${Array.from({ length: 22 }, (_, i) =>
    `<rect x="${(i * 271) % 1500}" y="${88 + ((i * 307) % 830)}" width="${20 + (i % 5) * 14}" height="5" rx="2.5" fill="${i % 3 ? "#38bdf8" : "#22d3a8"}" opacity="${0.5 - (i % 5) * 0.07}"/>`).join("")}
-</svg>`)}`;
+</svg>`);
+
+// Two more wallpapers for the README, picked to be opposites: one bright and
+// warm, one dark and cool. Between them they show what the dim and blur
+// controls are actually for — a bright image needs pushing back hard before
+// light text survives on top of it, a dark one barely at all.
+const SUNSET = svgUrl(`
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000">
+ <defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0%" stop-color="#2b1055"/>
+   <stop offset="38%" stop-color="#7f3f8f"/>
+   <stop offset="64%" stop-color="#e0685f"/>
+   <stop offset="84%" stop-color="#f7a55c"/>
+   <stop offset="100%" stop-color="#ffd08a"/>
+  </linearGradient>
+  <radialGradient id="sun" cx="50%" cy="50%" r="50%">
+   <stop offset="0%" stop-color="#fff3c4" stop-opacity="1"/>
+   <stop offset="55%" stop-color="#ffd08a" stop-opacity="0.85"/>
+   <stop offset="100%" stop-color="#ffd08a" stop-opacity="0"/>
+  </radialGradient>
+ </defs>
+ <rect width="1600" height="1000" fill="url(#sky)"/>
+ <circle cx="1080" cy="700" r="230" fill="url(#sun)"/>
+ <circle cx="1080" cy="700" r="86" fill="#fff6d8" opacity="0.95"/>
+ ${Array.from({ length: 7 }, (_, i) =>
+   `<ellipse cx="${240 + i * 210}" cy="${250 + (i % 3) * 46}" rx="${150 - (i % 3) * 34}" ry="${16 - (i % 3) * 3}" fill="#ffffff" opacity="${0.16 - (i % 3) * 0.04}"/>`).join("")}
+ <path d="M0 780 L250 640 L430 730 L640 600 L860 745 L1080 660 L1330 760 L1600 655 L1600 1000 L0 1000 Z" fill="#5b2a63" opacity="0.85"/>
+ <path d="M0 860 L300 745 L520 830 L780 705 L1010 835 L1290 745 L1600 845 L1600 1000 L0 1000 Z" fill="#3a1a48" opacity="0.9"/>
+ <path d="M0 940 L360 855 L680 930 L980 850 L1310 935 L1600 880 L1600 1000 L0 1000 Z" fill="#1e0f2b"/>
+</svg>`);
+
+const AURORA = svgUrl(`
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000">
+ <defs>
+  <linearGradient id="night" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0%" stop-color="#03060f"/>
+   <stop offset="55%" stop-color="#071426"/>
+   <stop offset="100%" stop-color="#020408"/>
+  </linearGradient>
+  <linearGradient id="veil" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0%" stop-color="#22d3a8" stop-opacity="0"/>
+   <stop offset="45%" stop-color="#22d3a8" stop-opacity="0.55"/>
+   <stop offset="100%" stop-color="#7c5cff" stop-opacity="0"/>
+  </linearGradient>
+  <linearGradient id="veil2" x1="0" y1="0" x2="0" y2="1">
+   <stop offset="0%" stop-color="#38bdf8" stop-opacity="0"/>
+   <stop offset="50%" stop-color="#38bdf8" stop-opacity="0.42"/>
+   <stop offset="100%" stop-color="#22d3a8" stop-opacity="0"/>
+  </linearGradient>
+  <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+   <feGaussianBlur stdDeviation="26"/>
+  </filter>
+ </defs>
+ <rect width="1600" height="1000" fill="url(#night)"/>
+ ${Array.from({ length: 130 }, (_, i) =>
+   `<circle cx="${(i * 397) % 1600}" cy="${(i * 173) % 640}" r="${i % 11 === 0 ? 2 : 1.1}" fill="#eaf4ff" opacity="${0.25 + (i % 5) * 0.14}"/>`).join("")}
+ <g filter="url(#soft)">
+  <path d="M120 120 C 380 300, 300 470, 520 620 L 690 620 C 470 460, 560 290, 320 110 Z" fill="url(#veil)"/>
+  <path d="M700 90 C 940 280, 860 450, 1080 600 L 1230 600 C 1020 440, 1110 270, 880 80 Z" fill="url(#veil2)"/>
+  <path d="M1180 150 C 1370 300, 1310 440, 1470 570 L 1580 570 C 1430 430, 1490 300, 1330 140 Z" fill="url(#veil)"/>
+ </g>
+ <path d="M0 830 L280 760 L560 825 L840 745 L1140 830 L1600 770 L1600 1000 L0 1000 Z" fill="#01040a"/>
+</svg>`);
 
 const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
 
@@ -263,17 +328,40 @@ const shot = (page, name) => page.screenshot({ path: path.join(out, `${name}.png
 // are navy-tinted too, so it carries the banner's colour all the way down.
 // The wallpaper is already dark, so it needs far less dimming than a photo
 // would; the light capture keeps the heavier veil it does need.
-for (const [theme, name, dim, blur] of [
-  ["blue", "screenshot-wallpaper", 28, 10],
+for (const [theme, name, paper, dim, blur] of [
+  ["blue", "screenshot-wallpaper", WALLPAPER, 28, 10],
   // The light theme's veil is white, so a heavy one on a dark wallpaper
   // just turns it grey and the colour is lost entirely. Light glass over
   // dark navy needs very little of it.
-  ["light", "screenshot-wallpaper-light", 22, 12],
+  ["light", "screenshot-wallpaper-light", WALLPAPER, 22, 12],
+  // A bright photo-like image is the hard case: it needs a heavy veil and
+  // real blur before light text is comfortable over it.
+  ["dark", "screenshot-wallpaper-sunset", SUNSET, 40, 14],
+  // A dark one is the easy case and can be left almost untouched.
+  ["dark", "screenshot-wallpaper-aurora", AURORA, 18, 6],
 ]) {
-  const page = await session({ theme, wallpaper: WALLPAPER, dim, blur });
+  const page = await session({ theme, wallpaper: paper, dim, blur });
   await tab(page, "Traffic");
   await shot(page, name);
   await page.close();
+}
+
+// Anything dropped into assets/wallpapers/ gets its own capture too, so a
+// wallpaper of your own — artwork, a photo, anything — can be shown here
+// without touching this script. Nothing is committed for you: only files
+// you put there are used, which keeps images nobody holds the rights to
+// out of the repository.
+const custom = await readdir(path.join(out, "wallpapers")).catch(() => []);
+for (const file of custom.filter((f) => /\.(png|jpe?g|webp|gif|bmp)$/i.test(f))) {
+  const bytes = await readFile(path.join(out, "wallpapers", file));
+  const mime = `image/${path.extname(file).slice(1).toLowerCase().replace("jpg", "jpeg")}`;
+  const url = `data:${mime};base64,${bytes.toString("base64")}`;
+  const slug = path.basename(file, path.extname(file)).replace(/[^a-z0-9-]+/gi, "-").toLowerCase();
+  const page = await session({ theme: "dark", wallpaper: url, dim: 55, blur: 14 });
+  await tab(page, "Traffic");
+  await shot(page, `screenshot-wallpaper-${slug}`);
+  await page.close();
+  console.log(`Captured custom wallpaper: ${file}`);
 }
 
 // Russian.
