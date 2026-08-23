@@ -1,0 +1,26 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { LogLine, Profile, Settings, Status } from "./types";
+
+export const listProfiles = () => invoke<Profile[]>("list_profiles");
+export const saveProfile = (profile: Profile) => invoke<Profile>("save_profile", { profile });
+export const deleteProfile = (id: string) => invoke<void>("delete_profile", { id });
+
+export const connect = (profileId: string) => invoke<void>("connect", { profileId });
+export const disconnect = () => invoke<void>("disconnect");
+export const getStatus = () => invoke<Status>("get_status");
+
+export const getLogs = () => invoke<LogLine[]>("get_logs");
+export const clearLogs = () => invoke<void>("clear_logs");
+
+export const getSettings = () => invoke<Settings>("get_settings");
+export const saveSettings = (settings: Settings) => invoke<Settings>("save_settings", { settings });
+
+/** Reads a certificate file chosen by the user and returns its PEM contents. */
+export const readCertFile = (path: string) => invoke<string>("read_cert_file", { path });
+
+export const onStatus = (fn: (status: Status) => void): Promise<UnlistenFn> =>
+  listen<Status>("status", (event) => fn(event.payload));
+
+export const onLog = (fn: (line: LogLine) => void): Promise<UnlistenFn> =>
+  listen<LogLine>("log", (event) => fn(event.payload));
