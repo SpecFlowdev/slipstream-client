@@ -94,7 +94,7 @@ jobs:
       - name: List what will be published
         run: ls -la staged
 
-      - name: Create the release
+      - name: Publish the files
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
@@ -103,29 +103,36 @@ jobs:
           set -euo pipefail
           tag="v${VERSION}"
 
-          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            echo "Release ${tag} already exists." >&2
-            exit 1
-          fi
-
-          draft_flag="--draft"
-          if [[ "${PUBLISH}" == "true" ]]; then
-            draft_flag=""
-          fi
-
-          # shellcheck disable=SC2086
-          gh release create "${tag}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "Slipstream ${VERSION}" \
-            --notes "Desktop client for the slipstream DNS tunnel.
+          cat > /tmp/notes.md <<'NOTES'
+          Desktop client for the slipstream DNS tunnel.
 
           | Platform | File |
           | --- | --- |
-          | Windows | \`.exe\` installer |
-          | Debian, Ubuntu | \`.deb\` |
-          | Fedora, RHEL | \`.rpm\` |
-          | Any Linux | \`.tar.gz\`, \`.AppImage\` |
+          | Windows | `…-setup.exe` |
+          | Debian, Ubuntu | `…-linux-x86_64.deb` |
+          | Fedora, RHEL | `…-linux-x86_64.rpm` |
+          | Any Linux | `…-linux-x86_64.tar.gz`, `…AppImage` |
 
-          Every archive carries its own \`.sha256\`." \
-            ${draft_flag} \
-            staged/*
+          Every file has a `.sha256` beside it.
+          NOTES
+
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            # The release already exists, possibly created by hand. Add the
+            # files to it and leave its title, notes and flags as they are.
+            echo "Release ${tag} exists; uploading the build to it."
+          else
+            draft_flag="--draft"
+            if [[ "${PUBLISH}" == "true" ]]; then
+              draft_flag=""
+            fi
+            # shellcheck disable=SC2086
+            gh release create "${tag}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "Slipstream ${VERSION}" \
+              --notes-file /tmp/notes.md \
+              ${draft_flag}
+          fi
+
+          gh release upload "${tag}" staged/* --repo "${GITHUB_REPOSITORY}" --clobber
+          gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json assets \
+            --jq '.assets[].name'
