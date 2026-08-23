@@ -150,6 +150,13 @@
         <span class="fact-label">{t("conn.pinning")}</span>
         <span class="fact-value">{active && active.cert ? t("conn.on") : t("conn.off")}</span>
       </div>
+      <div class="fact">
+        <span class="fact-label">{t("conn.congestion")}</span>
+        <span class="fact-value">
+          {active ? active.congestionControl.toUpperCase() : "—"}
+          {#if active?.gso}<span class="tag">GSO</span>{/if}
+        </span>
+      </div>
     </section>
   {/if}
 </div>
@@ -388,9 +395,21 @@
 
   .facts {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     gap: 12px;
     padding: 14px 16px;
+  }
+
+  .tag {
+    font-family: var(--sans);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--success-soft);
+    color: var(--success);
+    vertical-align: 2px;
   }
 
   .fact {

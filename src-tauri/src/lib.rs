@@ -1,5 +1,7 @@
 mod config;
 mod meter;
+mod sysproxy;
+mod traffic;
 mod tunnel;
 
 use std::sync::atomic::Ordering;
@@ -137,7 +139,8 @@ async fn connect(app: AppHandle, profile_id: String) -> Result<(), String> {
         .profile(&profile_id)
         .ok_or_else(|| "No such profile".to_string())?;
     store.set_last_profile(Some(profile_id));
-    tunnel::connect(app, profile).await
+    let system_proxy = store.settings().system_proxy;
+    tunnel::connect(app, profile, system_proxy).await
 }
 
 #[tauri::command]
@@ -244,8 +247,10 @@ pub fn run() {
                 if let Some(id) = store.last_profile() {
                     let handle = app.handle().clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Some(profile) = handle.state::<Arc<Store>>().profile(&id) {
-                            let _ = tunnel::connect(handle.clone(), profile).await;
+                        let store = handle.state::<Arc<Store>>();
+                        if let Some(profile) = store.profile(&id) {
+                            let system_proxy = store.settings().system_proxy;
+                            let _ = tunnel::connect(handle.clone(), profile, system_proxy).await;
                         }
                     });
                 }
@@ -279,6 +284,14 @@ pub fn run() {
             connect,
             disconnect,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running slipstream client");
+        .build(tauri::generate_context!())
+        .expect("error while running slipstream client")
+        .run(|app, event| {
+            // Quitting with the system proxy still pointed at a port that is
+            // about to stop answering would leave the whole desktop offline,
+            // so the teardown runs on the way out as well as on disconnect.
+            if let tauri::RunEvent::Exit = event {
+                tunnel::shutdown_blocking(app);
+            }
+        });
 }

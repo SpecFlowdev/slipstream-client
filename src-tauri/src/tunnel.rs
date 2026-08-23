@@ -20,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::Profile;
 use crate::meter::{self, Counters};
+use crate::traffic::{Registry, TrafficSnapshot};
 
 const LOG_CAPACITY: usize = 2000;
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(1000);
@@ -48,6 +49,12 @@ pub struct Status {
     pub rate_up: u64,
     pub rate_down: u64,
     pub active_connections: u64,
+    /// Best rates seen this session, so a burst that has already passed is
+    /// still visible rather than only the instant reading.
+    pub peak_rate_up: u64,
+    pub peak_rate_down: u64,
+    /// Where the traffic went, from the SOCKS5 requests the relay forwards.
+    pub traffic: TrafficSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -70,9 +77,16 @@ struct Session {
     last_down: u64,
     rate_up: u64,
     rate_down: u64,
+    peak_rate_up: u64,
+    peak_rate_down: u64,
     /// Broadcasts whether the tunnel is in the Connected state, to the
     /// kill-switch logic in `meter::serve`/`pump`.
     connected_tx: watch::Sender<bool>,
+    /// Per-session destination record, rebuilt on every connect.
+    registry: Arc<Registry>,
+    /// The system proxy configuration as it was before this session changed
+    /// it, or None when the session left it alone.
+    saved_proxy: Option<crate::sysproxy::Saved>,
 }
 
 #[derive(Default)]
@@ -103,6 +117,9 @@ impl TunnelState {
                 rate_up: 0,
                 rate_down: 0,
                 active_connections: 0,
+                peak_rate_up: 0,
+                peak_rate_down: 0,
+                traffic: TrafficSnapshot::default(),
             };
         };
         let (bytes_up, bytes_down, active) = session.counters.snapshot();
@@ -119,6 +136,9 @@ impl TunnelState {
             rate_up: session.rate_up,
             rate_down: session.rate_down,
             active_connections: active,
+            peak_rate_up: session.peak_rate_up,
+            peak_rate_down: session.peak_rate_down,
+            traffic: session.registry.snapshot(),
         }
     }
 
@@ -205,7 +225,7 @@ fn strip_ansi(input: &str) -> String {
     out
 }
 
-pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
+pub async fn connect(app: AppHandle, profile: Profile, system_proxy: bool) -> Result<(), String> {
     disconnect(app.clone()).await;
 
     let state = app.state::<Arc<TunnelState>>().inner().clone();
@@ -245,10 +265,23 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
         "127.0.0.1".to_string(),
         "--tcp-listen-port".to_string(),
         internal_port.to_string(),
+        // Validated by Profile::validate against the values the binary
+        // actually accepts, so this can never become an unknown-flag exit.
+        "--congestion-control".to_string(),
+        profile.congestion_control.clone(),
+        "--keep-alive-interval".to_string(),
+        profile.keep_alive_ms.to_string(),
+        // The flag takes an explicit boolean rather than being a bare switch.
+        "--gso".to_string(),
+        profile.gso.to_string(),
     ];
     if let Some(path) = &cert_path {
         args.push("--cert".to_string());
         args.push(path.to_string_lossy().to_string());
+    }
+    if !profile.authoritative.trim().is_empty() {
+        args.push("--authoritative".to_string());
+        args.push(profile.authoritative.trim().to_string());
     }
 
     let (mut rx, child) = app
@@ -266,6 +299,34 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
     // tunnel's own startup.
     let (connected_tx, connected_rx) = watch::channel(false);
 
+    let registry = Arc::new(Registry::default());
+
+    // Taking over the system proxy is opt-in and must never be the reason a
+    // connection fails: if the desktop refuses, say so in the log and carry
+    // on with the SOCKS5 port working normally.
+    let saved_proxy = if system_proxy {
+        match crate::sysproxy::enable(profile.listen_port) {
+            Ok(saved) => {
+                state.push_log(
+                    &app,
+                    "info",
+                    format!("System proxy pointed at 127.0.0.1:{}", profile.listen_port),
+                );
+                Some(saved)
+            }
+            Err(err) => {
+                state.push_log(
+                    &app,
+                    "warn",
+                    format!("Could not set the system proxy: {err}"),
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     async_runtime::spawn(meter::serve(
         front,
         SocketAddr::from(([127, 0, 0, 1], internal_port)),
@@ -273,6 +334,7 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
         cancel.clone(),
         connected_rx,
         state.kill_switch.clone(),
+        registry.clone(),
     ));
 
     {
@@ -288,7 +350,11 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
             last_down: 0,
             rate_up: 0,
             rate_down: 0,
+            peak_rate_up: 0,
+            peak_rate_down: 0,
             connected_tx,
+            registry,
+            saved_proxy,
         });
     }
 
@@ -333,6 +399,11 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
                             let mut guard = state.session.lock().unwrap();
                             if let Some(session) = guard.take() {
                                 session.cancel.cancel();
+                                // The tunnel dying must not leave the desktop
+                                // pointed at a proxy port nothing answers on.
+                                if let Some(saved) = &session.saved_proxy {
+                                    crate::sysproxy::restore(saved);
+                                }
                             }
                         }
                         break;
@@ -361,6 +432,8 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
                                 ((up.saturating_sub(session.last_up)) as f64 / elapsed) as u64;
                             session.rate_down =
                                 ((down.saturating_sub(session.last_down)) as f64 / elapsed) as u64;
+                            session.peak_rate_up = session.peak_rate_up.max(session.rate_up);
+                            session.peak_rate_down = session.peak_rate_down.max(session.rate_down);
                             session.last_up = up;
                             session.last_down = down;
                             session.last_sample = Instant::now();
@@ -379,12 +452,33 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
     Ok(())
 }
 
+/// Tears the session down from a context that cannot await, used on the way
+/// out of the process. Only the parts that must not be skipped run here: the
+/// child process is killed and the system proxy is put back.
+pub fn shutdown_blocking(app: &AppHandle) {
+    let Some(state) = app.try_state::<Arc<TunnelState>>() else {
+        return;
+    };
+    let session = state.session.lock().unwrap().take();
+    if let Some(session) = session {
+        session.cancel.cancel();
+        let _ = session.child.kill();
+        if let Some(saved) = &session.saved_proxy {
+            crate::sysproxy::restore(saved);
+        }
+    }
+}
+
 pub async fn disconnect(app: AppHandle) {
     let state = app.state::<Arc<TunnelState>>().inner().clone();
     let session = state.session.lock().unwrap().take();
     if let Some(session) = session {
         session.cancel.cancel();
         let _ = session.child.kill();
+        if let Some(saved) = &session.saved_proxy {
+            crate::sysproxy::restore(saved);
+            state.push_log(&app, "info", "System proxy restored".to_string());
+        }
         state.push_log(&app, "info", "Tunnel stopped".to_string());
     }
     state.set_state(&app, ConnectionState::Disconnected, None);

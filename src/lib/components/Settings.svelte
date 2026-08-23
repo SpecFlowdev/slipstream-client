@@ -15,7 +15,15 @@
 
   let wallpaperError = $state<string | null>(null);
 
-  function toggle(key: "autoReconnect" | "connectOnLaunch" | "minimiseToTray" | "killSwitch") {
+  function toggle(
+    key:
+      | "autoReconnect"
+      | "connectOnLaunch"
+      | "minimiseToTray"
+      | "killSwitch"
+      | "systemProxy"
+      | "animations",
+  ) {
     onChange({ ...settings, [key]: !settings[key] });
   }
 
@@ -111,28 +119,82 @@
       </select>
     </label>
 
-    {#if settings.theme === "dark"}
-      <div class="wallpaper">
-        <div class="wallpaper-main">
-          <span class="row-title">{t("settings.wallpaper")}</span>
-          <span class="row-sub">{t("settings.wallpaperHint")}</span>
-        </div>
-        {#if wallpaperPreview}
-          <img class="thumb" src={wallpaperPreview} alt="" />
-        {:else}
-          <div class="thumb thumb-empty">{t("settings.wallpaperNone")}</div>
-        {/if}
-        <div class="wallpaper-actions">
-          <button class="ghost" onclick={pickWallpaper}>{t("settings.wallpaperChoose")}</button>
-          {#if settings.wallpaperPath}
-            <button class="ghost" onclick={removeWallpaper}>{t("settings.wallpaperRemove")}</button>
-          {/if}
-        </div>
+    <div class="wallpaper">
+      <div class="wallpaper-main">
+        <span class="row-title">{t("settings.wallpaper")}</span>
+        <span class="row-sub">{t("settings.wallpaperHint")}</span>
       </div>
-      {#if wallpaperError}
-        <p class="error">{wallpaperError}</p>
+      {#if wallpaperPreview}
+        <img class="thumb" src={wallpaperPreview} alt="" />
+      {:else}
+        <div class="thumb thumb-empty">{t("settings.wallpaperNone")}</div>
       {/if}
+      <div class="wallpaper-actions">
+        <button class="ghost" onclick={pickWallpaper}>{t("settings.wallpaperChoose")}</button>
+        {#if settings.wallpaperPath}
+          <button class="ghost" onclick={removeWallpaper}>{t("settings.wallpaperRemove")}</button>
+        {/if}
+      </div>
+    </div>
+    {#if wallpaperError}
+      <p class="error">{wallpaperError}</p>
     {/if}
+
+    <!-- Only worth showing once there is an image for them to act on. -->
+    {#if settings.wallpaperPath}
+      <label class="slider-row">
+        <span class="slider-head">
+          <span class="row-title">{t("settings.wallpaperDim")}</span>
+          <span class="slider-value">{settings.wallpaperDim}%</span>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="90"
+          step="5"
+          value={settings.wallpaperDim}
+          oninput={(e) =>
+            onChange({ ...settings, wallpaperDim: Number((e.currentTarget as HTMLInputElement).value) })}
+        />
+        <span class="row-sub">{t("settings.wallpaperDimHint")}</span>
+      </label>
+
+      <label class="slider-row">
+        <span class="slider-head">
+          <span class="row-title">{t("settings.wallpaperBlur")}</span>
+          <span class="slider-value">{settings.wallpaperBlur} px</span>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="40"
+          step="2"
+          value={settings.wallpaperBlur}
+          oninput={(e) =>
+            onChange({ ...settings, wallpaperBlur: Number((e.currentTarget as HTMLInputElement).value) })}
+        />
+        <span class="row-sub">{t("settings.wallpaperBlurHint")}</span>
+      </label>
+    {/if}
+
+    <button class="row" onclick={() => toggle("animations")}>
+      <span class="row-main">
+        <span class="row-title">{t("settings.animations")}</span>
+        <span class="row-sub">{t("settings.animationsSub")}</span>
+      </span>
+      <span class="switch" class:on={settings.animations}></span>
+    </button>
+  </section>
+
+  <section class="card">
+    <h2>{t("settings.network")}</h2>
+    <button class="row" onclick={() => toggle("systemProxy")}>
+      <span class="row-main">
+        <span class="row-title">{t("settings.systemProxy")}</span>
+        <span class="row-sub">{t("settings.systemProxySub")}</span>
+      </span>
+      <span class="switch" class:on={settings.systemProxy}></span>
+    </button>
   </section>
 
   <section class="card about">
@@ -278,6 +340,68 @@
     display: flex;
     gap: 6px;
     flex: none;
+  }
+
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .slider-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .slider-value {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  /* The native range widget is another control WebKitGTK draws itself and
+     ignores our colours on, exactly like <select>; drawn from scratch here
+     for the same reason. */
+  input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    padding: 0;
+    border: none;
+    border-radius: 99px;
+    background: var(--bg-inset);
+    outline: none;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 0 0 4px var(--accent-soft);
+    transition: box-shadow 0.15s;
+  }
+
+  input[type="range"]:hover::-webkit-slider-thumb {
+    box-shadow: 0 0 0 6px var(--accent-soft);
+  }
+
+  input[type="range"]::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
   }
 
   .ghost {

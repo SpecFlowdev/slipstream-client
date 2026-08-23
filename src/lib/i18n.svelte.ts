@@ -10,9 +10,29 @@ export type Language = "system" | "en" | "ru";
 
 const en = {
   "nav.connection": "Connection",
+  "nav.traffic": "Traffic",
   "nav.servers": "Servers",
   "nav.logs": "Logs",
   "nav.settings": "Settings",
+
+  "traffic.lastMinute": "last 60 s",
+  "traffic.received": "received",
+  "traffic.sent": "sent",
+  "traffic.online": "online",
+  "traffic.peakDown": "Peak download",
+  "traffic.peakUp": "Peak upload",
+  "traffic.avgDown": "Average down",
+  "traffic.avgUp": "Average up",
+  "traffic.destinations": "Destinations",
+  "traffic.sessionConns": "Connections",
+  "traffic.topHosts": "Top destinations",
+  "traffic.noHosts": "No destinations recorded yet.",
+  "traffic.liveConnections": "Live connections",
+  "traffic.noConnections": "Nothing open right now.",
+  "traffic.unknownHost": "unnamed",
+  "traffic.emptyTitle": "No traffic yet",
+  "traffic.emptyBody":
+    "Connect and send something through the proxy. Destinations are read from the SOCKS5 requests passing through this app and never leave the device.",
 
   "state.disconnected": "Not connected",
   "state.starting": "Starting",
@@ -33,6 +53,7 @@ const en = {
   "conn.openConnections": "Open connections",
   "conn.localPort": "Local port",
   "conn.pinning": "Pinning",
+  "conn.congestion": "Congestion",
   "conn.on": "On",
   "conn.off": "Off",
   "conn.emptyTitle": "No servers yet",
@@ -69,6 +90,24 @@ const en = {
     "Paste the certificate directly, or choose the cert.pem file. Without one the server is not verified, so anyone able to answer your DNS queries can impersonate it.",
   "profiles.cancel": "Cancel",
   "profiles.save": "Save",
+  "profiles.tuning": "Performance",
+  "profiles.tuningHint":
+    "Passed straight to the tunnel engine. The defaults suit most links; change them if throughput disappoints.",
+  "profiles.congestion": "Congestion control",
+  "profiles.congestionBbr": "BBR — faster on lossy links",
+  "profiles.congestionCubic": "dCUBIC — cautious, loss-based",
+  "profiles.congestionHint":
+    "BBR paces to the bandwidth and round-trip time it measures. dCUBIC treats any loss as congestion and backs off, which costs speed over DNS, where loss is normal.",
+  "profiles.gso": "Segmentation offload (GSO)",
+  "profiles.gsoHint":
+    "Lets the kernel split one large UDP write into many packets, so far fewer system calls carry the same traffic. A clear win where it is supported; unsupported systems log a warning and carry on.",
+  "profiles.keepAlive": "Keep-alive (ms)",
+  "profiles.keepAliveHint":
+    "How often the tunnel pings to hold NAT and resolver state open. Lower survives aggressive networks, at the cost of idle traffic.",
+  "profiles.authoritative": "Authoritative server",
+  "profiles.authoritativeHint":
+    "Query this address directly instead of going through a recursive resolver — faster, but far more conspicuous. Leave empty to use the resolver above.",
+  "profiles.optional": "optional",
 
   "logs.all": "All",
   "logs.info": "Info",
@@ -98,10 +137,20 @@ const en = {
   "settings.language": "Language",
   "settings.languageSystem": "Match system",
   "settings.wallpaper": "Wallpaper",
-  "settings.wallpaperHint": "Shows behind translucent panels in the dark gray theme.",
+  "settings.wallpaperHint": "Shows behind the translucent panels, in whichever theme is active.",
   "settings.wallpaperChoose": "Choose image…",
   "settings.wallpaperRemove": "Remove",
   "settings.wallpaperNone": "No wallpaper set",
+  "settings.wallpaperDim": "Dim",
+  "settings.wallpaperDimHint": "Fades the image so text stays readable over a bright photo.",
+  "settings.wallpaperBlur": "Blur",
+  "settings.wallpaperBlurHint": "Softens a busy image so it stops competing with the interface.",
+  "settings.animations": "Animations",
+  "settings.animationsSub": "Graphs and bars ease between values instead of snapping.",
+  "settings.network": "Network",
+  "settings.systemProxy": "Set the system proxy",
+  "settings.systemProxySub":
+    "Points this computer's proxy setting at the tunnel while connected, and restores it on disconnect, so applications need no setup of their own. Software that ignores the system proxy still bypasses the tunnel — this is not a TUN device.",
   "settings.about": "About",
   "settings.aboutBody":
     "A client for the slipstream DNS tunnel. Traffic is exposed as a local SOCKS5 proxy; point applications at it to send them through the tunnel.",
@@ -113,9 +162,29 @@ type Key = keyof typeof en;
 
 const ru: Record<Key, string> = {
   "nav.connection": "Подключение",
+  "nav.traffic": "Трафик",
   "nav.servers": "Серверы",
   "nav.logs": "Логи",
   "nav.settings": "Настройки",
+
+  "traffic.lastMinute": "последние 60 с",
+  "traffic.received": "принято",
+  "traffic.sent": "отдано",
+  "traffic.online": "на связи",
+  "traffic.peakDown": "Пик приёма",
+  "traffic.peakUp": "Пик отдачи",
+  "traffic.avgDown": "Средний приём",
+  "traffic.avgUp": "Средняя отдача",
+  "traffic.destinations": "Направлений",
+  "traffic.sessionConns": "Соединений",
+  "traffic.topHosts": "Куда идёт трафик",
+  "traffic.noHosts": "Направлений пока нет.",
+  "traffic.liveConnections": "Активные соединения",
+  "traffic.noConnections": "Сейчас ничего не открыто.",
+  "traffic.unknownHost": "без имени",
+  "traffic.emptyTitle": "Трафика пока нет",
+  "traffic.emptyBody":
+    "Подключитесь и пропустите что-нибудь через прокси. Направления читаются из SOCKS5-запросов, проходящих через это приложение, и никуда не отправляются.",
 
   "state.disconnected": "Не подключено",
   "state.starting": "Запуск",
@@ -136,6 +205,7 @@ const ru: Record<Key, string> = {
   "conn.openConnections": "Открытых соединений",
   "conn.localPort": "Локальный порт",
   "conn.pinning": "Пиннинг",
+  "conn.congestion": "Перегрузка",
   "conn.on": "Вкл",
   "conn.off": "Выкл",
   "conn.emptyTitle": "Серверов пока нет",
@@ -172,6 +242,24 @@ const ru: Record<Key, string> = {
     "Вставьте сертификат прямо сюда или выберите файл cert.pem. Без него сервер не проверяется, поэтому выдать себя за него сможет любой, кто отвечает на ваши DNS-запросы.",
   "profiles.cancel": "Отмена",
   "profiles.save": "Сохранить",
+  "profiles.tuning": "Производительность",
+  "profiles.tuningHint":
+    "Передаётся движку туннеля как есть. Значения по умолчанию подходят почти везде; меняйте, если не устраивает скорость.",
+  "profiles.congestion": "Контроль перегрузки",
+  "profiles.congestionBbr": "BBR — быстрее на каналах с потерями",
+  "profiles.congestionCubic": "dCUBIC — осторожный, по потерям",
+  "profiles.congestionHint":
+    "BBR подстраивается под измеренную полосу и задержку. dCUBIC считает любую потерю признаком перегрузки и сбавляет скорость — а в DNS-туннеле потери это норма, так что это стоит скорости.",
+  "profiles.gso": "Разгрузка сегментации (GSO)",
+  "profiles.gsoHint":
+    "Позволяет ядру разбивать одну большую UDP-запись на много пакетов — тот же трафик уходит за куда меньшее число системных вызовов. Там, где поддерживается, даёт заметный прирост; где нет — просто предупреждение в логе.",
+  "profiles.keepAlive": "Keep-alive (мс)",
+  "profiles.keepAliveHint":
+    "Как часто туннель напоминает о себе, чтобы NAT и резолвер не забыли о соединении. Меньше — надёжнее на агрессивных сетях, но появляется трафик на холостом ходу.",
+  "profiles.authoritative": "Авторитативный сервер",
+  "profiles.authoritativeHint":
+    "Спрашивать этот адрес напрямую, минуя рекурсивный резолвер — быстрее, но гораздо заметнее. Пусто — использовать резолвер выше.",
+  "profiles.optional": "необязательно",
 
   "logs.all": "Все",
   "logs.info": "Инфо",
@@ -201,10 +289,20 @@ const ru: Record<Key, string> = {
   "settings.language": "Язык",
   "settings.languageSystem": "Как в системе",
   "settings.wallpaper": "Обои",
-  "settings.wallpaperHint": "Видны сквозь полупрозрачные панели в тёмно-серой теме.",
+  "settings.wallpaperHint": "Видны сквозь полупрозрачные панели в любой теме.",
   "settings.wallpaperChoose": "Выбрать изображение…",
   "settings.wallpaperRemove": "Убрать",
   "settings.wallpaperNone": "Обои не заданы",
+  "settings.wallpaperDim": "Затемнение",
+  "settings.wallpaperDimHint": "Приглушает картинку, чтобы текст читался поверх светлого фото.",
+  "settings.wallpaperBlur": "Размытие",
+  "settings.wallpaperBlurHint": "Смягчает пёструю картинку, чтобы она не спорила с интерфейсом.",
+  "settings.animations": "Анимации",
+  "settings.animationsSub": "Графики и полосы плавно перетекают между значениями, а не прыгают.",
+  "settings.network": "Сеть",
+  "settings.systemProxy": "Ставить системный прокси",
+  "settings.systemProxySub":
+    "Пока туннель поднят, направляет системную настройку прокси на него, а при отключении возвращает как было — приложениям ничего настраивать не нужно. Программы, игнорирующие системный прокси, всё равно пойдут мимо: это не TUN-устройство.",
   "settings.about": "О программе",
   "settings.aboutBody":
     "Клиент DNS-туннеля slipstream. Туннель доступен как локальный SOCKS5-прокси — укажите его приложениям, чтобы отправить их трафик через туннель.",

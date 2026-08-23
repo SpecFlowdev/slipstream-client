@@ -101,6 +101,41 @@
       <small>{t("profiles.certHint")}</small>
     </label>
 
+    <div class="section">
+      <h3>{t("profiles.tuning")}</h3>
+      <small>{t("profiles.tuningHint")}</small>
+    </div>
+
+    <label>
+      <span>{t("profiles.congestion")}</span>
+      <select bind:value={draft.congestionControl}>
+        <option value="bbr">{t("profiles.congestionBbr")}</option>
+        <option value="dcubic">{t("profiles.congestionCubic")}</option>
+      </select>
+      <small>{t("profiles.congestionHint")}</small>
+    </label>
+
+    <button type="button" class="toggle-row" onclick={() => (draft.gso = !draft.gso)}>
+      <span class="toggle-main">
+        <span class="toggle-title">{t("profiles.gso")}</span>
+        <span class="toggle-sub">{t("profiles.gsoHint")}</span>
+      </span>
+      <span class="switch" class:on={draft.gso}></span>
+    </button>
+
+    <div class="row">
+      <label>
+        <span>{t("profiles.keepAlive")}</span>
+        <input type="number" min="100" max="60000" step="50" bind:value={draft.keepAliveMs} required />
+        <small>{t("profiles.keepAliveHint")}</small>
+      </label>
+      <label>
+        <span>{t("profiles.authoritative")} <em>({t("profiles.optional")})</em></span>
+        <input bind:value={draft.authoritative} placeholder="203.0.113.9:53" spellcheck="false" />
+        <small>{t("profiles.authoritativeHint")}</small>
+      </label>
+    </div>
+
     {#if error}
       <p class="error">{error}</p>
     {/if}
@@ -259,6 +294,89 @@
     align-items: center;
     gap: 9px;
     flex-wrap: wrap;
+  }
+
+  /* Divides the connection details above from the tuning below, so the
+     editor reads as two groups rather than one long run of fields. */
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+  }
+
+  label > span em {
+    font-style: normal;
+    text-transform: none;
+    letter-spacing: 0;
+    opacity: 0.75;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-align: left;
+    padding: 0;
+  }
+
+  .toggle-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .toggle-title {
+    font-size: 13.5px;
+  }
+
+  .toggle-sub {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    line-height: 1.45;
+  }
+
+  .switch {
+    position: relative;
+    flex: none;
+    width: 38px;
+    height: 21px;
+    border-radius: 99px;
+    background: var(--bg-inset);
+    border: 1px solid var(--border-strong);
+    transition: background 0.18s, border-color 0.18s;
+  }
+
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    transition: transform 0.18s, background 0.18s;
+  }
+
+  .switch.on {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+
+  .switch.on::after {
+    transform: translateX(17px);
+    background: var(--accent);
   }
 
   textarea {

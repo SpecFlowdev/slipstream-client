@@ -22,6 +22,8 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
+use crate::traffic::{ConnCounters, Registry, Socks5Sniffer};
+
 #[derive(Debug, Default)]
 pub struct Counters {
     pub bytes_up: AtomicU64,
@@ -53,6 +55,7 @@ pub async fn serve(
     cancel: CancellationToken,
     connected: watch::Receiver<bool>,
     kill_switch: Arc<AtomicBool>,
+    registry: Arc<Registry>,
 ) {
     loop {
         let accepted = tokio::select! {
@@ -76,14 +79,30 @@ pub async fn serve(
         let cancel = cancel.clone();
         let connected = connected.clone();
         let kill_switch = kill_switch.clone();
+        let registry = registry.clone();
         tokio::spawn(async move {
             counters.active.fetch_add(1, Ordering::Relaxed);
-            let _ = pump(inbound, upstream, &counters, cancel, connected, kill_switch).await;
+            let own = Arc::new(ConnCounters::default());
+            let id = registry.open(own.clone());
+            let _ = pump(
+                inbound,
+                upstream,
+                &counters,
+                cancel,
+                connected,
+                kill_switch,
+                &registry,
+                id,
+                &own,
+            )
+            .await;
+            registry.close(id);
             counters.active.fetch_sub(1, Ordering::Relaxed);
         });
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn pump(
     mut inbound: TcpStream,
     upstream: SocketAddr,
@@ -91,6 +110,9 @@ async fn pump(
     cancel: CancellationToken,
     mut connected: watch::Receiver<bool>,
     kill_switch: Arc<AtomicBool>,
+    registry: &Registry,
+    id: u64,
+    own: &ConnCounters,
 ) -> io::Result<()> {
     let mut outbound = tokio::select! {
         _ = cancel.cancelled() => return Ok(()),
@@ -103,8 +125,10 @@ async fn pump(
     let (mut ci, mut co) = inbound.split();
     let (mut ui, mut uo) = outbound.split();
 
-    let up = copy_counting(&mut ci, &mut uo, &counters.bytes_up);
-    let down = copy_counting(&mut ui, &mut co, &counters.bytes_down);
+    // Only the application-to-tunnel direction carries the SOCKS5 request, so
+    // that is the only side worth reading for a destination.
+    let up = copy_up(&mut ci, &mut uo, &counters.bytes_up, &own.up, registry, id);
+    let down = copy_counting(&mut ui, &mut co, &counters.bytes_down, &own.down);
 
     // Resolves once the tunnel drops while this connection is enabled for the
     // kill switch, so an in-flight transfer gets cut rather than left hanging.
@@ -134,7 +158,12 @@ async fn pump(
     }
 }
 
-async fn copy_counting<R, W>(reader: &mut R, writer: &mut W, counter: &AtomicU64) -> io::Result<u64>
+async fn copy_counting<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    counter: &AtomicU64,
+    own: &AtomicU64,
+) -> io::Result<u64>
 where
     R: AsyncReadExt + Unpin,
     W: AsyncWriteExt + Unpin,
@@ -150,6 +179,41 @@ where
         writer.write_all(&buf[..read]).await?;
         total += read as u64;
         counter.fetch_add(read as u64, Ordering::Relaxed);
+        own.fetch_add(read as u64, Ordering::Relaxed);
+    }
+}
+
+/// As `copy_counting`, but also reads the passing bytes for a SOCKS5 request
+/// so the connection can be attributed to a destination. The bytes are
+/// forwarded exactly as they arrived — the sniffer only looks.
+async fn copy_up<R, W>(
+    reader: &mut R,
+    writer: &mut W,
+    counter: &AtomicU64,
+    own: &AtomicU64,
+    registry: &Registry,
+    id: u64,
+) -> io::Result<u64>
+where
+    R: AsyncReadExt + Unpin,
+    W: AsyncWriteExt + Unpin,
+{
+    let mut buf = vec![0u8; 16 * 1024];
+    let mut total = 0u64;
+    let mut sniffer = Socks5Sniffer::default();
+    loop {
+        let read = reader.read(&mut buf).await?;
+        if read == 0 {
+            let _ = writer.shutdown().await;
+            return Ok(total);
+        }
+        if let Some(target) = sniffer.feed(&buf[..read]) {
+            registry.name(id, target);
+        }
+        writer.write_all(&buf[..read]).await?;
+        total += read as u64;
+        counter.fetch_add(read as u64, Ordering::Relaxed);
+        own.fetch_add(read as u64, Ordering::Relaxed);
     }
 }
 
@@ -194,6 +258,7 @@ mod tests {
             cancel.clone(),
             rx,
             kill_switch,
+            Arc::new(Registry::default()),
         ));
 
         let mut client = TcpStream::connect(front).await.unwrap();
@@ -205,6 +270,49 @@ mod tests {
         let (up, down, _) = counters.snapshot();
         assert_eq!(up, 12);
         assert_eq!(down, 12);
+        cancel.cancel();
+    }
+
+    #[tokio::test]
+    async fn attributes_a_connection_to_the_host_named_in_its_socks5_request() {
+        let echo_addr = echo_server().await;
+        let listener = bind(0).await.unwrap();
+        let front = listener.local_addr().unwrap();
+        let counters = Arc::new(Counters::default());
+        let cancel = CancellationToken::new();
+        let (_tx, rx) = watch::channel(true);
+        let registry = Arc::new(Registry::default());
+        tokio::spawn(serve(
+            listener,
+            echo_addr,
+            counters.clone(),
+            cancel.clone(),
+            rx,
+            Arc::new(AtomicBool::new(true)),
+            registry.clone(),
+        ));
+
+        // A real SOCKS5 opening: greeting, then a connect request for a name.
+        let mut handshake = vec![0x05, 0x01, 0x00, 0x05, 0x01, 0x00, 0x03];
+        let host = b"stats.example.com";
+        handshake.push(host.len() as u8);
+        handshake.extend_from_slice(host);
+        handshake.extend_from_slice(&443u16.to_be_bytes());
+
+        let mut client = TcpStream::connect(front).await.unwrap();
+        client.write_all(&handshake).await.unwrap();
+
+        // The echo server sends it straight back, which also proves the relay
+        // forwarded the handshake untouched rather than swallowing it.
+        let mut echoed = vec![0u8; handshake.len()];
+        client.read_exact(&mut echoed).await.unwrap();
+        assert_eq!(echoed, handshake, "the sniffer must not alter the stream");
+
+        let snapshot = registry.snapshot();
+        assert_eq!(snapshot.connections.len(), 1);
+        assert_eq!(snapshot.connections[0].host, "stats.example.com");
+        assert_eq!(snapshot.connections[0].port, 443);
+        assert_eq!(snapshot.top_hosts[0].host, "stats.example.com");
         cancel.cancel();
     }
 
@@ -231,6 +339,7 @@ mod tests {
             cancel.clone(),
             rx,
             kill_switch,
+            Arc::new(Registry::default()),
         ));
 
         let mut client = TcpStream::connect(front).await.unwrap();
@@ -264,6 +373,7 @@ mod tests {
             cancel.clone(),
             rx,
             kill_switch,
+            Arc::new(Registry::default()),
         ));
 
         let mut client = TcpStream::connect(front).await.unwrap();
@@ -300,6 +410,7 @@ mod tests {
             cancel.clone(),
             rx,
             kill_switch,
+            Arc::new(Registry::default()),
         ));
 
         let mut client = TcpStream::connect(front).await.unwrap();

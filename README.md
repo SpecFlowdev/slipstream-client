@@ -20,8 +20,18 @@ Linux · Windows
 ---
 
 <div align="center">
-  <img src="assets/screenshot-connection.png" alt="Connection screen" width="90%">
+  <img src="assets/screenshot-traffic.png" alt="Traffic dashboard" width="94%">
 </div>
+
+---
+
+## What it does
+
+Keeps your tunnel servers in one place and turns the one you pick into a **local SOCKS5 proxy**. Point a browser or any SOCKS-aware application at that port and its traffic leaves through your server, carried inside ordinary DNS queries.
+
+The tunnel engine is the upstream `slipstream-client` binary, shipped alongside the app and supervised by it. The app owns the port you configure and forwards to the engine, so **every figure on screen is measured, not guessed** — including which destinations your traffic actually went to.
+
+Set up the other end with the [server installer](https://github.com/SpecFlowdev/slipstream-installer); it prints every value this app asks for.
 
 ---
 
@@ -39,59 +49,81 @@ Grab the latest build from [Releases](https://github.com/SpecFlowdev/slipstream-
 Every file ships with a `.sha256` next to it:
 
 ```sh
-sha256sum -c slipstream-client-0.1.0-linux-x86_64.deb.sha256
+sha256sum -c slipstream-client-0.1.6-linux-x86_64.deb.sha256
 ```
-
----
-
-## What it does
-
-Keeps your tunnel servers in one place and turns the one you pick into a **local SOCKS5 proxy**. Point a browser or any SOCKS-aware application at that port and its traffic leaves through your server, carried inside ordinary DNS queries.
-
-The tunnel engine is the upstream `slipstream-client` binary, shipped alongside the app and supervised by it. The app owns the port you configure and forwards to the engine, so the throughput figures on screen are measured rather than guessed.
-
-Set up the other end with the [server installer](https://github.com/SpecFlowdev/slipstream-installer); it prints every value this app asks for.
 
 ---
 
 ## Features
 
-- **Server profiles** — domain, resolver, pinned certificate, local port and proxy credentials, stored per server. Paste a certificate's contents directly, or pick the file — either way it's pinned
-- **Live statistics** — download and upload rates as smoothed, glowing graphs over the last minute, session totals, open connection count and uptime
-- **Log viewer** — the tunnel's own output, filtered by level, with follow-the-tail
-- **Runs in the tray on Windows** — closing the window leaves the tunnel up; connect on launch is optional. On Linux, closing the window quits: the system tray backend the app would otherwise use is known to crash on some Wayland desktops, so it's not built there at all
-- **Dark gray, blue or light theme, English and Russian** — follows the system or pins any of the three; the dark gray theme takes a custom wallpaper, shown behind frosted glass panels
-- **Kill switch** — refuses new connections and drops active ones on this app's own SOCKS5 port while the tunnel is down, so it fails closed instead of quietly hanging. Scoped to this app's port, not the whole system — that needs the TUN-based routing on the roadmap
-- **Nothing leaves the device** — profiles, certificates and credentials live in your config directory only
+### Traffic you can actually see
 
----
+A live dashboard rather than a pair of numbers. Throughput is drawn as a smoothed, dual-series graph over the last minute with a real byte-rate axis; alongside it sit session peaks and averages, and two tables that answer the question a proxy normally cannot: **where did the traffic go**.
 
-## Screens
+Destinations are read out of the SOCKS5 requests already passing through the app — the relay looks at the handshake it is forwarding anyway, never at payload, and never alters a byte. Nothing is resolved externally and nothing leaves the machine; the record is held in memory for the life of the session and dropped on disconnect.
 
 <table>
+  <tr>
+    <td width="50%"><img src="assets/screenshot-traffic.png" alt="Traffic dashboard"></td>
+    <td width="50%"><img src="assets/screenshot-connection.png" alt="Connection screen"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Traffic</strong> — graph, peaks, destinations, live connections</td>
+    <td align="center"><strong>Connection</strong> — one switch, and what it is doing</td>
+  </tr>
+</table>
+
+### Tuning that reaches the engine
+
+The performance controls are the tunnel binary's own flags, not decoration:
+
+| Control | Flag | What it changes |
+| --- | --- | --- |
+| **BBR / dCUBIC** | `--congestion-control` | BBR paces to the bandwidth and round-trip time it measures. dCUBIC reads any loss as congestion and backs off — which costs real speed over DNS, where loss is routine. **BBR is the default and usually the faster choice.** |
+| **Segmentation offload** | `--gso` | Lets the kernel split one large UDP write into many packets, so far fewer system calls carry the same traffic. A clear throughput win where supported. |
+| **Keep-alive** | `--keep-alive-interval` | How often the tunnel holds NAT and resolver state open. Lower survives aggressive networks at the cost of idle traffic. |
+| **Authoritative server** | `--authoritative` | Query the zone's server directly instead of a recursive resolver: faster, and far more conspicuous. |
+
+Values are validated against what the binary actually accepts, so a bad setting is refused when you save it rather than becoming a tunnel that will not start.
+
+<div align="center">
+  <img src="assets/screenshot-tuning.png" alt="Performance settings" width="82%">
+</div>
+
+### Everything else
+
+- **Server profiles** — domain, resolver, pinned certificate, local port, proxy credentials and tuning, stored per server. Paste a certificate's contents straight in, or pick the file
+- **Kill switch** — refuses new connections and drops active ones on this app's SOCKS5 port whenever the tunnel is not connected, so it fails closed instead of quietly hanging
+- **System proxy** — optionally points this computer's own proxy setting at the tunnel while connected and restores it on disconnect, so applications need no setup of their own *(see the note on TUN below)*
+- **Log viewer** — the tunnel's own output, filtered by level, with follow-the-tail
+- **Three themes and two languages** — dark gray, blue or light, English or Russian, each following the system or pinned
+- **Custom wallpaper** — in any theme, with dim and blur controls so the interface stays readable over any image
+- **Nothing leaves the device** — profiles, certificates, credentials and the traffic record live on your machine only
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshot-wallpaper.png" alt="Wallpaper"></td>
+    <td width="50%"><img src="assets/screenshot-light.png" alt="Light theme"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Wallpaper</strong> — frosted glass, dimmed and blurred to taste</td>
+    <td align="center"><strong>Light theme</strong> — or blue, or follow the system</td>
+  </tr>
   <tr>
     <td width="50%"><img src="assets/screenshot-servers.png" alt="Servers"></td>
     <td width="50%"><img src="assets/screenshot-settings.png" alt="Settings"></td>
   </tr>
   <tr>
     <td align="center"><strong>Servers</strong> — profiles and the editor</td>
-    <td align="center"><strong>Settings</strong> — kill switch, theme and wallpaper</td>
+    <td align="center"><strong>Settings</strong> — kill switch, appearance, network</td>
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshot-logs.png" alt="Logs"></td>
-    <td width="50%"><img src="assets/screenshot-light.png" alt="Light theme"></td>
+    <td width="50%"><img src="assets/screenshot-ru.png" alt="Russian interface"></td>
   </tr>
   <tr>
     <td align="center"><strong>Logs</strong> — tunnel output by level</td>
-    <td align="center"><strong>Light theme</strong> — or follow the system</td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="assets/screenshot-ru.png" alt="Russian interface"></td>
-    <td width="50%"><img src="assets/screenshot-connection.png" alt="Blue theme"></td>
-  </tr>
-  <tr>
     <td align="center"><strong>Russian</strong> — switched in settings</td>
-    <td align="center"><strong>Blue theme</strong> — the third option</td>
   </tr>
 </table>
 
@@ -103,11 +135,21 @@ Set up the other end with the [server installer](https://github.com/SpecFlowdev/
 | --- | --- |
 | Tunnel domain | The domain you gave the server installer |
 | Resolver | Your provider's resolver, e.g. `1.1.1.1:53`, or the server's own address |
-| Certificate | `/etc/slipstream/cert.pem` on the server — copy it across |
+| Certificate | `/etc/slipstream/cert.pem` on the server — paste it in or copy the file across |
 | Local SOCKS5 port | Anything free; `1080` by default |
 | Proxy username, password | Printed by the installer, also in `/etc/slipstream/socks-credentials` |
 
 The certificate is optional but worth setting. Without it the server is not verified at all, so anyone able to answer your DNS queries can impersonate it — and would receive the proxy password your client sends.
+
+---
+
+## System-wide traffic, and what "not a TUN device" means
+
+The **system proxy** switch in Settings points this computer's proxy configuration at the tunnel while it is connected, and puts your own configuration back on disconnect. Browsers and most desktop software honour that setting, so they go through the tunnel with nothing to configure per application.
+
+That is not the same as a TUN device, and the app does not pretend otherwise. A TUN device captures every packet a machine sends whether the sending program likes it or not; the upstream tunnel exposes a SOCKS5 port and nothing else, so there is no packet-level path to capture. **Software that ignores the system proxy still bypasses the tunnel.** Full capture needs a userspace network stack in front of a TUN device, which is on the roadmap below rather than quietly implied here.
+
+The kill switch has the same honest boundary: it closes *this app's* proxy port when the tunnel is down. It is not a system-wide firewall rule.
 
 ---
 
@@ -144,17 +186,43 @@ Do the same on the server; its [installer](https://github.com/SpecFlowdev/slipst
 
 ```
 your app ──► 127.0.0.1:1080 ──► slipstream-tunnel ──► DNS ──► server ──► SOCKS5 ──► internet
-             (this app,          (upstream binary,           (your VPS)
-              counts bytes)       QUIC over DNS)
+             (this app:          (upstream binary,          (your VPS)
+              counts bytes,       QUIC over DNS,
+              reads SOCKS5        BBR or dCUBIC)
+              destinations,
+              kill switch)
 ```
+
+The app never terminates the SOCKS5 session — it forwards it verbatim and reads the handshake in passing, which is what makes the destination figures possible without decrypting anything.
+
+---
+
+## Notes for Linux
+
+Closing the window quits the app rather than minimising it. The system tray backend GTK apps normally use (`libayatana-appindicator`) triggers a fatal Wayland protocol error on several desktops, killing the process about a second after launch, so it is not built on Linux at all. On Wayland the app also relaunches itself under XWayland at startup, which is the configuration the WebView is reliable on.
+
+The tray still works normally on Windows, where "close to tray" appears in Settings.
 
 ---
 
 ## Roadmap
 
-- System-wide routing through a TUN device, replacing the manual proxy setup
+- A userspace network stack in front of a TUN device, for capture that does not depend on applications honouring the proxy setting
 - Android build — the tunnel needs cross-compiling against the NDK first, as upstream ships no Android binary
 - Profile import and export by link or QR
+- Per-destination history kept across sessions, opt-in
+
+---
+
+## Building
+
+```sh
+npm ci
+node scripts/fetch-sidecar.mjs     # downloads and verifies the tunnel binary
+npm run tauri dev
+```
+
+`node scripts/screenshots.mjs` regenerates the images in this README from the built interface (needs `npm i --no-save playwright`).
 
 ---
 

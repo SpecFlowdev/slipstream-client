@@ -2,6 +2,7 @@
   import type { UnlistenFn } from "@tauri-apps/api/event";
   import { convertFileSrc } from "@tauri-apps/api/core";
   import Connection from "./lib/components/Connection.svelte";
+  import Traffic from "./lib/components/Traffic.svelte";
   import Profiles from "./lib/components/Profiles.svelte";
   import Logs from "./lib/components/Logs.svelte";
   import Settings from "./lib/components/Settings.svelte";
@@ -9,13 +10,14 @@
   import { setLanguage, t } from "./lib/i18n.svelte";
   import { blankProfile, EMPTY_STATUS, type LogLine, type Profile, type Settings as Prefs, type Status } from "./lib/types";
 
-  const VERSION = "0.1.5";
+  const VERSION = "0.1.6";
   const SAMPLES = 60;
 
-  type Tab = "connection" | "servers" | "logs" | "settings";
+  type Tab = "connection" | "traffic" | "servers" | "logs" | "settings";
 
   const TABS = [
     { id: "connection", label: "nav.connection" },
+    { id: "traffic", label: "nav.traffic" },
     { id: "servers", label: "nav.servers" },
     { id: "logs", label: "nav.logs" },
     { id: "settings", label: "nav.settings" },
@@ -34,6 +36,10 @@
     language: "system",
     killSwitch: true,
     wallpaperPath: null,
+    wallpaperDim: 45,
+    wallpaperBlur: 0,
+    systemProxy: false,
+    animations: true,
   });
   let editing = $state<Profile | null>(null);
 
@@ -81,16 +87,20 @@
     }
   });
 
-  // Wallpaper only applies to the explicit dark theme (see app.css); picking
-  // "system" or "light" leaves it configured but visually inactive rather
-  // than clearing it, so switching back to dark brings it straight back.
+  // The wallpaper applies in every theme, not just the dark one it was
+  // originally gated to — picking an image while on light or blue used to
+  // save the file and then show nothing.
   $effect(() => {
     const root = document.documentElement;
-    if (prefs.theme === "dark" && prefs.wallpaperPath) {
+    if (prefs.wallpaperPath) {
       root.style.setProperty("--wallpaper-url", `url("${convertFileSrc(prefs.wallpaperPath)}")`);
+      root.style.setProperty("--wallpaper-dim", String(prefs.wallpaperDim / 100));
+      root.style.setProperty("--wallpaper-blur", `${prefs.wallpaperBlur}px`);
       root.setAttribute("data-wallpaper", "on");
     } else {
       root.style.removeProperty("--wallpaper-url");
+      root.style.removeProperty("--wallpaper-dim");
+      root.style.removeProperty("--wallpaper-blur");
       root.removeAttribute("data-wallpaper");
     }
   });
@@ -158,6 +168,8 @@
           <svg class="glyph" viewBox="0 0 20 20" fill="none" aria-hidden="true">
             {#if item.id === "connection"}
               <path d="M2.5 11h3l1.6-4.5 2.6 8 1.8-6 1.4 2.5h4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            {:else if item.id === "traffic"}
+              <path d="M3 16.5V12M7.5 16.5V7M12 16.5v-6.5M16.5 16.5V4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
             {:else if item.id === "servers"}
               <rect x="3" y="3.5" width="14" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.5" />
               <rect x="3" y="11" width="14" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.5" />
@@ -196,6 +208,8 @@
           editing = blankProfile();
         }}
       />
+    {:else if tab === "traffic"}
+      <Traffic {status} {upSamples} {downSamples} animated={prefs.animations} />
     {:else if tab === "servers"}
       <Profiles
         {profiles}
