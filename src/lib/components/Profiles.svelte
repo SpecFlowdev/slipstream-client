@@ -83,7 +83,7 @@
 
     <label>
       <span>{t("profiles.cert")}</span>
-      <div class="cert">
+      <div class="cert-bar">
         <button type="button" class="ghost" onclick={pickCert}>{t("profiles.certChoose")}</button>
         {#if draft.cert}
           <span class="pill ok">{t("profiles.certPinned")}</span>
@@ -92,6 +92,12 @@
           <span class="pill warn">{t("profiles.certNotPinned")}</span>
         {/if}
       </div>
+      <textarea
+        bind:value={draft.cert}
+        placeholder={t("profiles.certPastePlaceholder")}
+        spellcheck="false"
+        rows="6"
+      ></textarea>
       <small>{t("profiles.certHint")}</small>
     </label>
 
@@ -241,11 +247,19 @@
     gap: 12px;
   }
 
-  .cert {
+  .cert-bar {
     display: flex;
     align-items: center;
     gap: 9px;
     flex-wrap: wrap;
+  }
+
+  textarea {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 90px;
   }
 
   .pill {

@@ -60,12 +60,13 @@ const en = {
   "profiles.username": "Proxy username",
   "profiles.password": "Proxy password",
   "profiles.cert": "Server certificate",
-  "profiles.certChoose": "Choose cert.pem…",
+  "profiles.certChoose": "Choose file…",
+  "profiles.certPastePlaceholder": "-----BEGIN CERTIFICATE-----\n…paste the contents of cert.pem here…\n-----END CERTIFICATE-----",
   "profiles.certPinned": "Pinned",
   "profiles.certNotPinned": "Not pinned",
   "profiles.certRemove": "Remove",
   "profiles.certHint":
-    "Without a certificate the server is not verified, so anyone able to answer your DNS queries can impersonate it.",
+    "Paste the certificate directly, or choose the cert.pem file. Without one the server is not verified, so anyone able to answer your DNS queries can impersonate it.",
   "profiles.cancel": "Cancel",
   "profiles.save": "Save",
 
@@ -161,12 +162,13 @@ const ru: Record<Key, string> = {
   "profiles.username": "Логин прокси",
   "profiles.password": "Пароль прокси",
   "profiles.cert": "Сертификат сервера",
-  "profiles.certChoose": "Выбрать cert.pem…",
+  "profiles.certChoose": "Выбрать файл…",
+  "profiles.certPastePlaceholder": "-----BEGIN CERTIFICATE-----\n…вставьте сюда содержимое cert.pem…\n-----END CERTIFICATE-----",
   "profiles.certPinned": "Закреплён",
   "profiles.certNotPinned": "Не закреплён",
   "profiles.certRemove": "Убрать",
   "profiles.certHint":
-    "Без сертификата сервер не проверяется, поэтому выдать себя за него сможет любой, кто отвечает на ваши DNS-запросы.",
+    "Вставьте сертификат прямо сюда или выберите файл cert.pem. Без него сервер не проверяется, поэтому выдать себя за него сможет любой, кто отвечает на ваши DNS-запросы.",
   "profiles.cancel": "Отмена",
   "profiles.save": "Сохранить",
 

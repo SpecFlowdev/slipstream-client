@@ -110,7 +110,8 @@ button {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: var(--text);
   background: var(--bg-inset);
@@ -145,12 +146,14 @@ select option {
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--text-faint);
 }
 
