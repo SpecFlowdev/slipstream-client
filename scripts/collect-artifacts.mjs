@@ -91,9 +91,11 @@ try {
   await copyFile(path.join(root, "LICENSE"), path.join(stage, "LICENSE"));
   await copyFile(path.join(root, "README.md"), path.join(stage, "README.md"));
 
-  const archive = path.join(work, `${base}.tar.gz`);
-  execFileSync("tar", ["-czf", archive, "-C", work, stageName], { stdio: "inherit" });
-  await publish(archive, `${base}.tar.gz`);
+  // Relative paths only, run from the staging directory: tar on Windows reads
+  // a leading "C:" as a remote host spec and refuses the absolute path.
+  const archiveName = `${base}.tar.gz`;
+  execFileSync("tar", ["-czf", archiveName, stageName], { cwd: work, stdio: "inherit" });
+  await publish(path.join(work, archiveName), archiveName);
 } finally {
   await rm(work, { recursive: true, force: true });
 }
