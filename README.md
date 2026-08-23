@@ -102,6 +102,35 @@ The certificate is optional but worth setting. Without it the server is not veri
 
 ---
 
+## Tuning the socket buffers (Linux)
+
+The tunnel moves a lot of small UDP datagrams. On a busy link the kernel's
+default socket buffers overflow, and the packets it drops look like loss to
+QUIC, which backs off. Raising them to 25 MiB:
+
+```sh
+sudo tee /etc/sysctl.d/99-slipstream.conf >/dev/null <<'EOF'
+net.core.rmem_max=26214400
+net.core.wmem_max=26214400
+net.core.rmem_default=26214400
+net.core.wmem_default=26214400
+EOF
+sudo sysctl --system
+```
+
+The two `default` values are what change anything here: the tunnel never calls
+`setsockopt(SO_RCVBUF)`, so its UDP socket gets whatever the default is. The
+`max` pair only raises the ceiling an application may ask for.
+
+They apply to **every** socket on the machine, so this trades memory across all
+processes for tunnel throughput. Worth doing on a machine that is mostly running
+the tunnel; on a shared one, set just the `max` pair. Windows needs no
+equivalent — it sizes UDP buffers on its own.
+
+Do the same on the server; its [installer](https://github.com/SpecFlowdev/slipstream-installer) documents it too.
+
+---
+
 ## How it fits together
 
 ```
