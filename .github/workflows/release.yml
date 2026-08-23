@@ -117,9 +117,20 @@ jobs:
           NOTES
 
           if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            # The release already exists, possibly created by hand. Add the
-            # files to it and leave its title, notes and flags as they are.
+            # The release already exists, possibly created by hand, or left
+            # as a draft by an earlier run of this workflow with publish
+            # unchecked. Add the files to it and leave its title and notes
+            # as they are; only take it out of draft, and only forward -
+            # never re-draft a release that's already public just because
+            # this run left the box unchecked.
             echo "Release ${tag} exists; uploading the build to it."
+            if [[ "${PUBLISH}" == "true" ]]; then
+              is_draft="$(gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq '.isDraft')"
+              if [[ "${is_draft}" == "true" ]]; then
+                echo "Publishing the existing draft release."
+                gh release edit "${tag}" --repo "${GITHUB_REPOSITORY}" --draft=false
+              fi
+            fi
           else
             draft_flag="--draft"
             if [[ "${PUBLISH}" == "true" ]]; then
