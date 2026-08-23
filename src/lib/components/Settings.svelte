@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Settings } from "../types";
+  import { t } from "../i18n.svelte";
 
   interface Props {
     settings: Settings;
@@ -12,63 +13,69 @@
   function toggle(key: "autoReconnect" | "connectOnLaunch" | "minimiseToTray") {
     onChange({ ...settings, [key]: !settings[key] });
   }
+
+  const switches = [
+    { key: "connectOnLaunch", title: "settings.connectOnLaunch", sub: "settings.connectOnLaunchSub" },
+    { key: "autoReconnect", title: "settings.autoReconnect", sub: "settings.autoReconnectSub" },
+    { key: "minimiseToTray", title: "settings.tray", sub: "settings.traySub" },
+  ] as const;
 </script>
 
 <div class="settings">
   <section class="card">
-    <h2>Behaviour</h2>
+    <h2>{t("settings.behaviour")}</h2>
 
-    <button class="row" onclick={() => toggle("connectOnLaunch")}>
-      <span class="row-main">
-        <span class="row-title">Connect on launch</span>
-        <span class="row-sub">Start the last used server when the app opens.</span>
-      </span>
-      <span class="switch" class:on={settings.connectOnLaunch}></span>
-    </button>
-
-    <button class="row" onclick={() => toggle("autoReconnect")}>
-      <span class="row-main">
-        <span class="row-title">Reconnect automatically</span>
-        <span class="row-sub">The tunnel retries on its own after a drop.</span>
-      </span>
-      <span class="switch" class:on={settings.autoReconnect}></span>
-    </button>
-
-    <button class="row" onclick={() => toggle("minimiseToTray")}>
-      <span class="row-main">
-        <span class="row-title">Close to tray</span>
-        <span class="row-sub">Closing the window leaves the tunnel running.</span>
-      </span>
-      <span class="switch" class:on={settings.minimiseToTray}></span>
-    </button>
+    {#each switches as row (row.key)}
+      <button class="row" onclick={() => toggle(row.key)}>
+        <span class="row-main">
+          <span class="row-title">{t(row.title)}</span>
+          <span class="row-sub">{t(row.sub)}</span>
+        </span>
+        <span class="switch" class:on={settings[row.key]}></span>
+      </button>
+    {/each}
   </section>
 
   <section class="card">
-    <h2>Appearance</h2>
-    <label class="theme">
-      <span class="row-title">Theme</span>
+    <h2>{t("settings.appearance")}</h2>
+
+    <label class="choice">
+      <span class="row-title">{t("settings.theme")}</span>
       <select
         value={settings.theme}
         onchange={(e) =>
-          onChange({ ...settings, theme: (e.currentTarget as HTMLSelectElement).value as Settings["theme"] })}
+          onChange({
+            ...settings,
+            theme: (e.currentTarget as HTMLSelectElement).value as Settings["theme"],
+          })}
       >
-        <option value="system">Match system</option>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
+        <option value="system">{t("settings.themeSystem")}</option>
+        <option value="dark">{t("settings.themeDark")}</option>
+        <option value="light">{t("settings.themeLight")}</option>
+      </select>
+    </label>
+
+    <label class="choice">
+      <span class="row-title">{t("settings.language")}</span>
+      <select
+        value={settings.language}
+        onchange={(e) =>
+          onChange({
+            ...settings,
+            language: (e.currentTarget as HTMLSelectElement).value as Settings["language"],
+          })}
+      >
+        <option value="system">{t("settings.languageSystem")}</option>
+        <option value="en">English</option>
+        <option value="ru">Русский</option>
       </select>
     </label>
   </section>
 
   <section class="card about">
-    <h2>About</h2>
-    <p>
-      Slipstream {version} — a client for the
-      <strong>slipstream</strong> DNS tunnel. Traffic is exposed as a local SOCKS5 proxy;
-      point applications at it to send them through the tunnel.
-    </p>
-    <p class="muted">
-      Servers, certificates and proxy credentials are stored on this device only.
-    </p>
+    <h2>{t("settings.about")}</h2>
+    <p>Slipstream {version} — {t("settings.aboutBody")}</p>
+    <p class="muted">{t("settings.aboutPrivacy")}</p>
   </section>
 </div>
 
@@ -153,14 +160,17 @@
     background: var(--accent);
   }
 
-  .theme {
+  .choice {
     display: flex;
     align-items: center;
     gap: 14px;
     padding: 12px 0;
+    border-bottom: 1px solid var(--border);
   }
 
-  .theme select {
+  .choice:last-child { border-bottom: none; }
+
+  .choice select {
     margin-left: auto;
     width: 170px;
   }
@@ -171,8 +181,6 @@
     color: var(--text-muted);
     line-height: 1.6;
   }
-
-  .about strong { color: var(--text); }
 
   .muted { color: var(--text-faint) !important; font-size: 12px !important; }
 </style>

@@ -55,6 +55,7 @@ export interface Settings {
   /** Keep running in the tray when the window is closed. */
   minimiseToTray: boolean;
   theme: "system" | "dark" | "light";
+  language: "system" | "en" | "ru";
 }
 
 export const EMPTY_STATUS: Status = {

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { LogLine, LogLevel } from "../types";
   import { clockTime } from "../format";
+  import { t } from "../i18n.svelte";
 
   interface Props {
     lines: LogLine[];
@@ -37,23 +38,23 @@
 <div class="logs">
   <div class="bar">
     <div class="filters">
-      {#each ["all", "info", "warn", "error"] as level (level)}
+      {#each [["all", "logs.all"], ["info", "logs.info"], ["warn", "logs.warn"], ["error", "logs.error"]] as const as [level, label] (level)}
         <button
           class="chip"
           class:active={filter === level}
           onclick={() => (filter = level as LogLevel | "all")}
         >
-          {level}
+          {t(label)}
         </button>
       {/each}
     </div>
-    <span class="count">{shown.length} lines</span>
-    <button class="ghost" onclick={onClear}>Clear</button>
+    <span class="count">{shown.length} {t("logs.lines")}</span>
+    <button class="ghost" onclick={onClear}>{t("logs.clear")}</button>
   </div>
 
   <div class="viewport" bind:this={viewport} onscroll={onScroll}>
     {#if shown.length === 0}
-      <p class="none">Nothing logged yet.</p>
+      <p class="none">{t("logs.none")}</p>
     {:else}
       {#each shown as line (line.seq)}
         <div class="line">
@@ -73,7 +74,7 @@
         if (viewport) viewport.scrollTop = viewport.scrollHeight;
       }}
     >
-      Jump to latest
+      {t("logs.jump")}
     </button>
   {/if}
 </div>
@@ -105,7 +106,6 @@
     font-size: 12px;
     color: var(--text-muted);
     border: 1px solid var(--border);
-    text-transform: capitalize;
     transition: color 0.15s, border-color 0.15s, background 0.15s;
   }
 

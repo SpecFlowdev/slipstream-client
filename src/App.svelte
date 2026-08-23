@@ -5,19 +5,20 @@
   import Logs from "./lib/components/Logs.svelte";
   import Settings from "./lib/components/Settings.svelte";
   import * as ipc from "./lib/ipc";
-  import { EMPTY_STATUS, type LogLine, type Profile, type Settings as Prefs, type Status } from "./lib/types";
+  import { setLanguage, t } from "./lib/i18n.svelte";
+  import { blankProfile, EMPTY_STATUS, type LogLine, type Profile, type Settings as Prefs, type Status } from "./lib/types";
 
   const VERSION = "0.1.0";
   const SAMPLES = 60;
 
   type Tab = "connection" | "servers" | "logs" | "settings";
 
-  const TABS: { id: Tab; label: string; glyph: string }[] = [
-    { id: "connection", label: "Connection", glyph: "◈" },
-    { id: "servers", label: "Servers", glyph: "▤" },
-    { id: "logs", label: "Logs", glyph: "≡" },
-    { id: "settings", label: "Settings", glyph: "⚙" },
-  ];
+  const TABS = [
+    { id: "connection", label: "nav.connection", glyph: "◈" },
+    { id: "servers", label: "nav.servers", glyph: "▤" },
+    { id: "logs", label: "nav.logs", glyph: "≡" },
+    { id: "settings", label: "nav.settings", glyph: "⚙" },
+  ] as const;
 
   let tab = $state<Tab>("connection");
   let profiles = $state<Profile[]>([]);
@@ -29,6 +30,7 @@
     connectOnLaunch: false,
     minimiseToTray: true,
     theme: "system",
+    language: "system",
   });
   let editing = $state<Profile | null>(null);
 
@@ -61,6 +63,10 @@
       );
     })();
     return () => stops.forEach((stop) => stop());
+  });
+
+  $effect(() => {
+    setLanguage(prefs.language);
   });
 
   $effect(() => {
@@ -132,13 +138,13 @@
       {#each TABS as item (item.id)}
         <button class="nav" class:active={tab === item.id} onclick={() => (tab = item.id)}>
           <span class="glyph">{item.glyph}</span>
-          <span>{item.label}</span>
+          <span>{t(item.label)}</span>
         </button>
       {/each}
     </nav>
 
     <div class="foot">
-      <span class="badge" data-state={status.state}>{status.state}</span>
+      <span class="badge" data-state={status.state}>{t(`state.${status.state}`)}</span>
     </div>
   </aside>
 
@@ -155,7 +161,7 @@
         onDisconnect={stopTunnel}
         onNewProfile={() => {
           tab = "servers";
-          editing = { id: "", name: "", domain: "", resolver: "", cert: "", listenPort: 1080, socksUsername: "", socksPassword: "" };
+          editing = blankProfile();
         }}
       />
     {:else if tab === "servers"}

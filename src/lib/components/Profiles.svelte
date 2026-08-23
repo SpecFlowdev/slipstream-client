@@ -3,6 +3,7 @@
   import type { Profile } from "../types";
   import { blankProfile } from "../types";
   import { readCertFile } from "../ipc";
+  import { t } from "../i18n.svelte";
 
   interface Props {
     profiles: Profile[];
@@ -46,55 +47,52 @@
 
 {#if editing !== null}
   <form class="card editor" onsubmit={submit}>
-    <h2>{draft.id ? "Edit server" : "New server"}</h2>
+    <h2>{draft.id ? t("profiles.editTitle") : t("profiles.newTitle")}</h2>
 
     <label>
-      <span>Name</span>
-      <input bind:value={draft.name} placeholder="Home server" required />
+      <span>{t("profiles.name")}</span>
+      <input bind:value={draft.name} placeholder={t("profiles.namePlaceholder")} required />
     </label>
 
     <label>
-      <span>Tunnel domain</span>
+      <span>{t("profiles.domain")}</span>
       <input bind:value={draft.domain} placeholder="t.example.com" spellcheck="false" required />
-      <small>The delegated zone your server answers for.</small>
+      <small>{t("profiles.domainHint")}</small>
     </label>
 
     <label>
-      <span>Resolver</span>
+      <span>{t("profiles.resolver")}</span>
       <input bind:value={draft.resolver} placeholder="1.1.1.1:53" spellcheck="false" required />
-      <small>Where queries are sent — your provider's resolver, or the server itself.</small>
+      <small>{t("profiles.resolverHint")}</small>
     </label>
 
     <div class="row">
       <label>
-        <span>Local SOCKS5 port</span>
+        <span>{t("profiles.port")}</span>
         <input type="number" min="1" max="65535" bind:value={draft.listenPort} required />
       </label>
       <label>
-        <span>Proxy username</span>
+        <span>{t("profiles.username")}</span>
         <input bind:value={draft.socksUsername} placeholder="slipstream" spellcheck="false" />
       </label>
       <label>
-        <span>Proxy password</span>
+        <span>{t("profiles.password")}</span>
         <input type="password" bind:value={draft.socksPassword} />
       </label>
     </div>
 
     <label>
-      <span>Server certificate</span>
+      <span>{t("profiles.cert")}</span>
       <div class="cert">
-        <button type="button" class="ghost" onclick={pickCert}>Choose cert.pem…</button>
+        <button type="button" class="ghost" onclick={pickCert}>{t("profiles.certChoose")}</button>
         {#if draft.cert}
-          <span class="pill ok">Pinned</span>
-          <button type="button" class="link" onclick={() => (draft.cert = "")}>Remove</button>
+          <span class="pill ok">{t("profiles.certPinned")}</span>
+          <button type="button" class="link" onclick={() => (draft.cert = "")}>{t("profiles.certRemove")}</button>
         {:else}
-          <span class="pill warn">Not pinned</span>
+          <span class="pill warn">{t("profiles.certNotPinned")}</span>
         {/if}
       </div>
-      <small>
-        Without a certificate the server is not verified, so anyone able to answer your DNS
-        queries can impersonate it.
-      </small>
+      <small>{t("profiles.certHint")}</small>
     </label>
 
     {#if error}
@@ -102,19 +100,19 @@
     {/if}
 
     <div class="actions">
-      <button type="button" class="ghost" onclick={() => onEdit(null)}>Cancel</button>
-      <button type="submit" class="primary">Save</button>
+      <button type="button" class="ghost" onclick={() => onEdit(null)}>{t("profiles.cancel")}</button>
+      <button type="submit" class="primary">{t("profiles.save")}</button>
     </div>
   </form>
 {:else}
   <div class="list">
     <div class="list-head">
-      <h2>Servers</h2>
-      <button class="primary small" onclick={() => onEdit(blankProfile())}>Add server</button>
+      <h2>{t("profiles.title")}</h2>
+      <button class="primary small" onclick={() => onEdit(blankProfile())}>{t("profiles.add")}</button>
     </div>
 
     {#if profiles.length === 0}
-      <p class="none">Nothing here yet.</p>
+      <p class="none">{t("profiles.none")}</p>
     {:else}
       {#each profiles as profile (profile.id)}
         <div class="card item">
@@ -123,18 +121,18 @@
             <span class="item-meta">{profile.domain} · via {profile.resolver}</span>
             <span class="item-meta">
               SOCKS5 on 127.0.0.1:{profile.listenPort}
-              {#if !profile.cert}<span class="unpinned"> · not pinned</span>{/if}
+              {#if !profile.cert}<span class="unpinned"> · {t("profiles.notPinned")}</span>{/if}
             </span>
           </div>
           <div class="item-actions">
-            <button class="ghost" onclick={() => onEdit(profile)}>Edit</button>
+            <button class="ghost" onclick={() => onEdit(profile)}>{t("profiles.edit")}</button>
             {#if confirmingDelete === profile.id}
               <button class="ghost destructive" onclick={() => { onDelete(profile.id); confirmingDelete = null; }}>
-                Confirm
+                {t("profiles.confirm")}
               </button>
             {:else}
               <button class="ghost destructive" onclick={() => (confirmingDelete = profile.id)}>
-                Delete
+                {t("profiles.delete")}
               </button>
             {/if}
           </div>

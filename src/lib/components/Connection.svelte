@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Profile, Status } from "../types";
   import { bytes, duration, rate } from "../format";
+  import { t } from "../i18n.svelte";
   import Sparkline from "./Sparkline.svelte";
 
   interface Props {
@@ -31,13 +32,13 @@
   let busy = $derived(status.state === "starting" || status.state === "connecting");
   let live = $derived(status.state === "connected" || status.state === "reconnecting");
 
-  const LABEL: Record<Status["state"], string> = {
-    disconnected: "Not connected",
-    starting: "Starting",
-    connecting: "Connecting",
-    connected: "Connected",
-    reconnecting: "Reconnecting",
-    error: "Failed",
+  const LABEL: Record<Status["state"], `state.${Status["state"]}`> = {
+    disconnected: "state.disconnected",
+    starting: "state.starting",
+    connecting: "state.connecting",
+    connected: "state.connected",
+    reconnecting: "state.reconnecting",
+    error: "state.error",
   };
 </script>
 
@@ -45,22 +46,22 @@
   {#if profiles.length === 0}
     <div class="empty">
       <div class="empty-icon">◇</div>
-      <h2>No servers yet</h2>
-      <p>Add the domain, certificate and proxy credentials your server printed when it was installed.</p>
-      <button class="primary" onclick={onNewProfile}>Add a server</button>
+      <h2>{t("conn.emptyTitle")}</h2>
+      <p>{t("conn.emptyBody")}</p>
+      <button class="primary" onclick={onNewProfile}>{t("conn.addServer")}</button>
     </div>
   {:else}
     <section class="card status-card" data-state={status.state}>
       <div class="status-head">
         <span class="dot" data-state={status.state}></span>
-        <span class="state">{LABEL[status.state]}</span>
+        <span class="state">{t(LABEL[status.state])}</span>
         {#if status.state === "connected"}
           <span class="uptime">{duration(status.uptimeSecs)}</span>
         {/if}
       </div>
 
       <label class="picker">
-        <span class="picker-label">Server</span>
+        <span class="picker-label">{t("conn.server")}</span>
         <select
           value={selectedId ?? ""}
           disabled={live || busy}
@@ -75,7 +76,7 @@
       {#if active}
         <div class="endpoint">
           <span>{active.domain}</span>
-          <span class="sep">via</span>
+          <span class="sep">{t("conn.via")}</span>
           <span>{active.resolver}</span>
         </div>
       {/if}
@@ -85,16 +86,16 @@
       {/if}
 
       {#if live || busy}
-        <button class="primary danger" onclick={onDisconnect}>Disconnect</button>
+        <button class="primary danger" onclick={onDisconnect}>{t("conn.disconnect")}</button>
       {:else}
-        <button class="primary" onclick={onConnect} disabled={!selectedId}>Connect</button>
+        <button class="primary" onclick={onConnect} disabled={!selectedId}>{t("conn.connect")}</button>
       {/if}
 
       {#if live && active}
         <p class="hint">
-          SOCKS5 proxy on <code>127.0.0.1:{active.listenPort}</code>
+          {t("conn.proxyOn")} <code>127.0.0.1:{active.listenPort}</code>
           {#if active.socksUsername}
-            · sign in as <code>{active.socksUsername}</code>
+            · {t("conn.signInAs")} <code>{active.socksUsername}</code>
           {/if}
         </p>
       {/if}
@@ -103,35 +104,35 @@
     <section class="meters">
       <div class="card meter">
         <div class="meter-head">
-          <span class="meter-name">Download</span>
+          <span class="meter-name">{t("conn.download")}</span>
           <span class="meter-rate down">{rate(status.rateDown)}</span>
         </div>
         <Sparkline samples={downSamples} color="var(--accent)" />
-        <span class="meter-total">{bytes(status.bytesDown)} total</span>
+        <span class="meter-total">{bytes(status.bytesDown)} {t("conn.total")}</span>
       </div>
 
       <div class="card meter">
         <div class="meter-head">
-          <span class="meter-name">Upload</span>
+          <span class="meter-name">{t("conn.upload")}</span>
           <span class="meter-rate up">{rate(status.rateUp)}</span>
         </div>
         <Sparkline samples={upSamples} color="var(--success)" />
-        <span class="meter-total">{bytes(status.bytesUp)} total</span>
+        <span class="meter-total">{bytes(status.bytesUp)} {t("conn.total")}</span>
       </div>
     </section>
 
     <section class="card facts">
       <div class="fact">
-        <span class="fact-label">Open connections</span>
+        <span class="fact-label">{t("conn.openConnections")}</span>
         <span class="fact-value">{status.activeConnections}</span>
       </div>
       <div class="fact">
-        <span class="fact-label">Local port</span>
+        <span class="fact-label">{t("conn.localPort")}</span>
         <span class="fact-value">{active ? active.listenPort : "—"}</span>
       </div>
       <div class="fact">
-        <span class="fact-label">Pinning</span>
-        <span class="fact-value">{active && active.cert ? "On" : "Off"}</span>
+        <span class="fact-label">{t("conn.pinning")}</span>
+        <span class="fact-value">{active && active.cert ? t("conn.on") : t("conn.off")}</span>
       </div>
     </section>
   {/if}

@@ -87,6 +87,13 @@ pub struct Settings {
     pub connect_on_launch: bool,
     pub minimise_to_tray: bool,
     pub theme: String,
+    /// "system", "en" or "ru".
+    #[serde(default = "default_language")]
+    pub language: String,
+}
+
+fn default_language() -> String {
+    "system".into()
 }
 
 impl Default for Settings {
@@ -96,6 +103,7 @@ impl Default for Settings {
             connect_on_launch: false,
             minimise_to_tray: true,
             theme: "system".into(),
+            language: default_language(),
         }
     }
 }

@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, e.g. 0.1.0
+        required: true
+      publish:
+        description: Publish the release instead of leaving it as a draft
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            bundles: deb,rpm,appimage
+          - name: windows-x86_64
+            runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            bundles: nsis
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \
+            libayatana-appindicator3-dev librsvg2-dev rpm
+
+      - run: npm ci
+
+      - name: Fetch the tunnel sidecar
+        run: node scripts/fetch-sidecar.mjs ${{ matrix.target }}
+
+      - name: Set the version
+        shell: bash
+        run: node scripts/set-version.mjs "${{ inputs.version }}"
+
+      - name: Build
+        run: npm run tauri build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - name: Collect artifacts
+        shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: node scripts/collect-artifacts.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.name }}
+          path: release/
+          if-no-files-found: error
+
+  release:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v5
+        with:
+          path: staged
+          merge-multiple: true
+
+      - name: List what will be published
+        run: ls -la staged
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}"
+
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists." >&2
+            exit 1
+          fi
+
+          draft_flag="--draft"
+          if [[ "${PUBLISH}" == "true" ]]; then
+            draft_flag=""
+          fi
+
+          # shellcheck disable=SC2086
+          gh release create "${tag}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Slipstream ${VERSION}" \
+            --notes "Desktop client for the slipstream DNS tunnel.
+
+          | Platform | File |
+          | --- | --- |
+          | Windows | \`.exe\` installer |
+          | Debian, Ubuntu | \`.deb\` |
+          | Fedora, RHEL | \`.rpm\` |
+          | Any Linux | \`.tar.gz\`, \`.AppImage\` |
+
+          Every archive carries its own \`.sha256\`." \
+            ${draft_flag} \
+            staged/*

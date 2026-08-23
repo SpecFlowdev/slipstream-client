@@ -13,6 +13,8 @@ Linux · Windows
 [![Tunnel](https://img.shields.io/badge/slipstream-v0.1.1-38bdf8?style=flat-square)](https://github.com/Mygod/slipstream-rust/releases/tag/v0.1.1)
 [![Server](https://img.shields.io/badge/server-installer-a78bfa?style=flat-square)](https://github.com/SpecFlowdev/slipstream-installer)
 
+[**Download**](https://github.com/SpecFlowdev/slipstream-client/releases/latest) · [Server installer](https://github.com/SpecFlowdev/slipstream-installer)
+
 </div>
 
 ---
@@ -20,6 +22,25 @@ Linux · Windows
 <div align="center">
   <img src="assets/screenshot-connection.png" alt="Connection screen" width="90%">
 </div>
+
+---
+
+## Download
+
+Grab the latest build from [Releases](https://github.com/SpecFlowdev/slipstream-client/releases/latest).
+
+| Platform | File |
+| --- | --- |
+| Windows | `…-setup.exe` |
+| Debian, Ubuntu, Mint | `…-linux-x86_64.deb` |
+| Fedora, RHEL, openSUSE | `…-linux-x86_64.rpm` |
+| Any Linux, no install | `…-linux-x86_64.tar.gz` or `…AppImage` |
+
+Every file ships with a `.sha256` next to it:
+
+```sh
+sha256sum -c slipstream-client-0.1.0-linux-x86_64.deb.sha256
+```
 
 ---
 
@@ -39,7 +60,7 @@ Set up the other end with the [server installer](https://github.com/SpecFlowdev/
 - **Live statistics** — download and upload rates graphed over the last minute, session totals, open connection count and uptime
 - **Log viewer** — the tunnel's own output, filtered by level, with follow-the-tail
 - **Runs in the tray** — closing the window leaves the tunnel up; connect on launch is optional
-- **Light and dark** — follows the system theme or pins either
+- **Light and dark, English and Russian** — follows the system or pins either
 - **Nothing leaves the device** — profiles, certificates and credentials live in your config directory only
 
 ---
@@ -54,6 +75,14 @@ Set up the other end with the [server installer](https://github.com/SpecFlowdev/
   <tr>
     <td align="center"><strong>Servers</strong> — profiles and the editor</td>
     <td align="center"><strong>Logs</strong> — tunnel output by level</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshot-light.png" alt="Light theme"></td>
+    <td width="50%"><img src="assets/screenshot-ru.png" alt="Russian interface"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Light theme</strong> — or follow the system</td>
+    <td align="center"><strong>Russian</strong> — switched in settings</td>
   </tr>
 </table>
 
@@ -70,26 +99,6 @@ Set up the other end with the [server installer](https://github.com/SpecFlowdev/
 | Proxy username, password | Printed by the installer, also in `/etc/slipstream/socks-credentials` |
 
 The certificate is optional but worth setting. Without it the server is not verified at all, so anyone able to answer your DNS queries can impersonate it — and would receive the proxy password your client sends.
-
----
-
-## Building
-
-Needs [Rust](https://rustup.rs), Node 22+, and on Linux the usual Tauri packages:
-
-```sh
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-```
-
-Then:
-
-```sh
-npm ci
-node scripts/fetch-sidecar.mjs   # downloads the tunnel binary, verifies its checksum
-npm run tauri dev                # or: npm run tauri build
-```
-
-`fetch-sidecar.mjs` pulls the prebuilt tunnel from the upstream release and checks it against a SHA256 pinned in the script — verifying only against the `.sha256` published beside it would not catch a swapped release. The binary is never committed here.
 
 ---
 

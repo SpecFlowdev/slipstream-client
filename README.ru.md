@@ -13,6 +13,8 @@ Linux · Windows
 [![Туннель](https://img.shields.io/badge/slipstream-v0.1.1-38bdf8?style=flat-square)](https://github.com/Mygod/slipstream-rust/releases/tag/v0.1.1)
 [![Сервер](https://img.shields.io/badge/сервер-установщик-a78bfa?style=flat-square)](https://github.com/SpecFlowdev/slipstream-installer)
 
+[**Скачать**](https://github.com/SpecFlowdev/slipstream-client/releases/latest) · [Установщик сервера](https://github.com/SpecFlowdev/slipstream-installer)
+
 </div>
 
 ---
@@ -20,6 +22,25 @@ Linux · Windows
 <div align="center">
   <img src="assets/screenshot-connection.png" alt="Экран подключения" width="90%">
 </div>
+
+---
+
+## Скачать
+
+Свежая сборка — в разделе [Releases](https://github.com/SpecFlowdev/slipstream-client/releases/latest).
+
+| Система | Файл |
+| --- | --- |
+| Windows | `…-setup.exe` |
+| Debian, Ubuntu, Mint | `…-linux-x86_64.deb` |
+| Fedora, RHEL, openSUSE | `…-linux-x86_64.rpm` |
+| Любой Linux, без установки | `…-linux-x86_64.tar.gz` или `…AppImage` |
+
+Рядом с каждым файлом лежит `.sha256`:
+
+```sh
+sha256sum -c slipstream-client-0.1.0-linux-x86_64.deb.sha256
+```
 
 ---
 
@@ -39,7 +60,7 @@ Linux · Windows
 - **Живая статистика** — графики приёма и отдачи за последнюю минуту, итоги сессии, число открытых соединений и время работы
 - **Просмотр логов** — вывод самого туннеля с фильтром по уровню и автопрокруткой
 - **Работа в трее** — закрытие окна не рвёт туннель; подключение при запуске включается по желанию
-- **Светлая и тёмная темы** — по системной или принудительно
+- **Светлая и тёмная темы, русский и английский** — по системным или принудительно
 - **Ничего не покидает устройство** — профили, сертификаты и пароли лежат только в вашем каталоге конфигурации
 
 ---
@@ -54,6 +75,14 @@ Linux · Windows
   <tr>
     <td align="center"><strong>Серверы</strong> — профили и редактор</td>
     <td align="center"><strong>Логи</strong> — вывод туннеля по уровням</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshot-light.png" alt="Светлая тема"></td>
+    <td width="50%"><img src="assets/screenshot-ru.png" alt="Русский интерфейс"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Светлая тема</strong> — или по системной</td>
+    <td align="center"><strong>Русский язык</strong> — переключается в настройках</td>
   </tr>
 </table>
 
@@ -70,26 +99,6 @@ Linux · Windows
 | Логин и пароль прокси | Печатает установщик, они же в `/etc/slipstream/socks-credentials` |
 
 Сертификат необязателен, но задать его стоит. Без него сервер не проверяется вообще, поэтому тот, кто может отвечать на ваши DNS-запросы, выдаст себя за него — и получит пароль от прокси, который отправит ваш клиент.
-
----
-
-## Сборка
-
-Нужны [Rust](https://rustup.rs), Node 22+, а на Linux — стандартные пакеты Tauri:
-
-```sh
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-```
-
-Далее:
-
-```sh
-npm ci
-node scripts/fetch-sidecar.mjs   # качает бинарник туннеля и сверяет контрольную сумму
-npm run tauri dev                # или: npm run tauri build
-```
-
-`fetch-sidecar.mjs` берёт готовый туннель из upstream-релиза и сверяет его с SHA256, зашитым в сам скрипт: проверка только по файлу `.sha256`, лежащему рядом, не поймала бы подмену релиза. Сам бинарник в репозиторий не коммитится.
 
 ---
 
