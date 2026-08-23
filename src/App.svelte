@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { UnlistenFn } from "@tauri-apps/api/event";
+  import { convertFileSrc } from "@tauri-apps/api/core";
   import Connection from "./lib/components/Connection.svelte";
   import Profiles from "./lib/components/Profiles.svelte";
   import Logs from "./lib/components/Logs.svelte";
@@ -31,6 +32,8 @@
     minimiseToTray: true,
     theme: "system",
     language: "system",
+    killSwitch: true,
+    wallpaperPath: null,
   });
   let editing = $state<Profile | null>(null);
 
@@ -75,6 +78,20 @@
       root.removeAttribute("data-theme");
     } else {
       root.setAttribute("data-theme", prefs.theme);
+    }
+  });
+
+  // Wallpaper only applies to the explicit dark theme (see app.css); picking
+  // "system" or "light" leaves it configured but visually inactive rather
+  // than clearing it, so switching back to dark brings it straight back.
+  $effect(() => {
+    const root = document.documentElement;
+    if (prefs.theme === "dark" && prefs.wallpaperPath) {
+      root.style.setProperty("--wallpaper-url", `url("${convertFileSrc(prefs.wallpaperPath)}")`);
+      root.setAttribute("data-wallpaper", "on");
+    } else {
+      root.style.removeProperty("--wallpaper-url");
+      root.removeAttribute("data-wallpaper");
     }
   });
 

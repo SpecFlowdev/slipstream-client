@@ -5,7 +5,7 @@
 //! metering relay in `meter`, which forwards to it.
 
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -15,6 +15,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::net::TcpListener;
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::Profile;
@@ -69,6 +70,9 @@ struct Session {
     last_down: u64,
     rate_up: u64,
     rate_down: u64,
+    /// Broadcasts whether the tunnel is in the Connected state, to the
+    /// kill-switch logic in `meter::serve`/`pump`.
+    connected_tx: watch::Sender<bool>,
 }
 
 #[derive(Default)]
@@ -77,6 +81,11 @@ pub struct TunnelState {
     state: Mutex<(ConnectionState, Option<String>)>,
     logs: Mutex<Vec<LogLine>>,
     seq: AtomicU64,
+    /// Live-toggleable: a Settings change applies to the running session
+    /// immediately, without needing to reconnect. Constructed false by
+    /// `#[derive(Default)]`; `run()` sets the real value from Settings before
+    /// any connection can start.
+    pub kill_switch: Arc<AtomicBool>,
 }
 
 impl TunnelState {
@@ -126,10 +135,18 @@ impl TunnelState {
             let mut guard = self.state.lock().unwrap();
             *guard = (state, message);
         }
-        if state == ConnectionState::Connected {
+        {
             let mut guard = self.session.lock().unwrap();
             if let Some(session) = guard.as_mut() {
-                session.connected_since.get_or_insert_with(Instant::now);
+                if state == ConnectionState::Connected {
+                    session.connected_since.get_or_insert_with(Instant::now);
+                }
+                // Every other state means "not safe to pass traffic" for the
+                // kill switch, including Reconnecting: a dropped connection
+                // getting a fresh one is still a gap the switch must cover.
+                let _ = session
+                    .connected_tx
+                    .send(state == ConnectionState::Connected);
             }
         }
         let _ = app.emit("status", self.status());
@@ -244,12 +261,18 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
 
     let counters = Arc::new(Counters::default());
     let cancel = CancellationToken::new();
+    // Starts false: nothing is Connected yet, so the kill switch (if on)
+    // refuses connections from the first moment rather than racing the
+    // tunnel's own startup.
+    let (connected_tx, connected_rx) = watch::channel(false);
 
     async_runtime::spawn(meter::serve(
         front,
         SocketAddr::from(([127, 0, 0, 1], internal_port)),
         counters.clone(),
         cancel.clone(),
+        connected_rx,
+        state.kill_switch.clone(),
     ));
 
     {
@@ -265,6 +288,7 @@ pub async fn connect(app: AppHandle, profile: Profile) -> Result<(), String> {
             last_down: 0,
             rate_up: 0,
             rate_down: 0,
+            connected_tx,
         });
     }
 

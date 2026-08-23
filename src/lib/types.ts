@@ -56,6 +56,14 @@ export interface Settings {
   minimiseToTray: boolean;
   theme: "system" | "dark" | "light";
   language: "system" | "en" | "ru";
+  /**
+   * Refuses new SOCKS5 connections and drops active ones while the tunnel is
+   * not connected. Scoped to this app's own proxy port, not the whole system
+   * — full system-wide blocking needs the TUN-based routing on the roadmap.
+   */
+  killSwitch: boolean;
+  /** Absolute path to a copy of the chosen wallpaper image, or null. Dark theme only. */
+  wallpaperPath: string | null;
 }
 
 export const EMPTY_STATUS: Status = {

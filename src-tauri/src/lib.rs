@@ -2,6 +2,7 @@ mod config;
 mod meter;
 mod tunnel;
 
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use tauri::menu::{Menu, MenuItem};
@@ -32,8 +33,17 @@ fn get_settings(store: State<'_, Arc<Store>>) -> Settings {
 }
 
 #[tauri::command]
-fn save_settings(store: State<'_, Arc<Store>>, settings: Settings) -> Result<Settings, String> {
-    store.save_settings(settings)
+fn save_settings(
+    store: State<'_, Arc<Store>>,
+    tunnel_state: State<'_, Arc<TunnelState>>,
+    settings: Settings,
+) -> Result<Settings, String> {
+    let saved = store.save_settings(settings)?;
+    // Applies to a session already in progress, not just the next connect.
+    tunnel_state
+        .kill_switch
+        .store(saved.kill_switch, Ordering::Relaxed);
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -58,6 +68,52 @@ fn read_cert_file(path: String) -> Result<String, String> {
         return Err("That file does not contain a PEM certificate".into());
     }
     Ok(body)
+}
+
+const WALLPAPER_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "bmp"];
+
+/// Copies the chosen image into the app's config directory as `wallpaper.<ext>`
+/// and returns that path, so the frontend can hand it to Tauri's asset
+/// protocol. Storing a copy (like `read_cert_file` does for certificates)
+/// means a later launch does not depend on the original file still being
+/// where the user picked it from, and avoids putting the image bytes into the
+/// JSON settings file.
+#[tauri::command]
+fn set_wallpaper(app: AppHandle, path: String) -> Result<String, String> {
+    let source = std::path::Path::new(&path);
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .filter(|e| WALLPAPER_EXTENSIONS.contains(&e.as_str()))
+        .ok_or_else(|| "Choose an image file (PNG, JPEG, WebP, GIF or BMP)".to_string())?;
+
+    let dir = app.path().app_config_dir().map_err(|err| err.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+    clear_wallpaper_files(&dir)?;
+
+    let dest = dir.join(format!("wallpaper.{ext}"));
+    std::fs::copy(source, &dest).map_err(|err| err.to_string())?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn clear_wallpaper(app: AppHandle) -> Result<(), String> {
+    let dir = app.path().app_config_dir().map_err(|err| err.to_string())?;
+    clear_wallpaper_files(&dir)
+}
+
+fn clear_wallpaper_files(dir: &std::path::Path) -> Result<(), String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with("wallpaper.") {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -118,6 +174,9 @@ pub fn run() {
 
             let store = Arc::new(Store::load(&dir));
             let tunnel_state = Arc::new(TunnelState::default());
+            tunnel_state
+                .kill_switch
+                .store(store.settings().kill_switch, Ordering::Relaxed);
             app.manage(store.clone());
             app.manage(tunnel_state);
 
@@ -155,6 +214,8 @@ pub fn run() {
             get_logs,
             clear_logs,
             read_cert_file,
+            set_wallpaper,
+            clear_wallpaper,
             connect,
             disconnect,
         ])

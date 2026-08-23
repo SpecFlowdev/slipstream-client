@@ -60,7 +60,8 @@ Set up the other end with the [server installer](https://github.com/SpecFlowdev/
 - **Live statistics** — download and upload rates graphed over the last minute, session totals, open connection count and uptime
 - **Log viewer** — the tunnel's own output, filtered by level, with follow-the-tail
 - **Runs in the tray** — closing the window leaves the tunnel up; connect on launch is optional
-- **Light and dark, English and Russian** — follows the system or pins either
+- **Light and dark gray, English and Russian** — follows the system or pins either; the dark gray theme takes a custom wallpaper, shown behind frosted panels
+- **Kill switch** — refuses new connections and drops active ones on this app's own SOCKS5 port while the tunnel is down, so it fails closed instead of quietly hanging. Scoped to this app's port, not the whole system — that needs the TUN-based routing on the roadmap
 - **Nothing leaves the device** — profiles, certificates and credentials live in your config directory only
 
 ---

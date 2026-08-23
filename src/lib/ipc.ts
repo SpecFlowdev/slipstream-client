@@ -19,6 +19,10 @@ export const saveSettings = (settings: Settings) => invoke<Settings>("save_setti
 /** Reads a certificate file chosen by the user and returns its PEM contents. */
 export const readCertFile = (path: string) => invoke<string>("read_cert_file", { path });
 
+/** Copies the chosen image into the app's config directory; returns its new path. */
+export const setWallpaper = (path: string) => invoke<string>("set_wallpaper", { path });
+export const clearWallpaper = () => invoke<void>("clear_wallpaper");
+
 export const onStatus = (fn: (status: Status) => void): Promise<UnlistenFn> =>
   listen<Status>("status", (event) => fn(event.payload));
 

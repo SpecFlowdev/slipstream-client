@@ -90,10 +90,23 @@ pub struct Settings {
     /// "system", "en" or "ru".
     #[serde(default = "default_language")]
     pub language: String,
+    /// Refuses new SOCKS5 connections and drops active ones while the tunnel
+    /// is not Connected, scoped to this app's own proxy port - not a
+    /// system-wide network block, since routing is not on a TUN device yet.
+    #[serde(default = "default_kill_switch")]
+    pub kill_switch: bool,
+    /// Absolute path to a copy of the chosen wallpaper image inside the app's
+    /// config directory, or None. Only meaningful with the dark theme.
+    #[serde(default)]
+    pub wallpaper_path: Option<String>,
 }
 
 fn default_language() -> String {
     "system".into()
+}
+
+fn default_kill_switch() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -104,6 +117,8 @@ impl Default for Settings {
             minimise_to_tray: true,
             theme: "system".into(),
             language: default_language(),
+            kill_switch: default_kill_switch(),
+            wallpaper_path: None,
         }
     }
 }

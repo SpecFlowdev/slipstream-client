@@ -1,6 +1,9 @@
 <script lang="ts">
+  import { open } from "@tauri-apps/plugin-dialog";
+  import { convertFileSrc } from "@tauri-apps/api/core";
   import type { Settings } from "../types";
   import { t } from "../i18n.svelte";
+  import * as ipc from "../ipc";
 
   interface Props {
     settings: Settings;
@@ -10,7 +13,9 @@
 
   let { settings, version, onChange }: Props = $props();
 
-  function toggle(key: "autoReconnect" | "connectOnLaunch" | "minimiseToTray") {
+  let wallpaperError = $state<string | null>(null);
+
+  function toggle(key: "autoReconnect" | "connectOnLaunch" | "minimiseToTray" | "killSwitch") {
     onChange({ ...settings, [key]: !settings[key] });
   }
 
@@ -18,7 +23,32 @@
     { key: "connectOnLaunch", title: "settings.connectOnLaunch", sub: "settings.connectOnLaunchSub" },
     { key: "autoReconnect", title: "settings.autoReconnect", sub: "settings.autoReconnectSub" },
     { key: "minimiseToTray", title: "settings.tray", sub: "settings.traySub" },
+    { key: "killSwitch", title: "settings.killSwitch", sub: "settings.killSwitchSub" },
   ] as const;
+
+  let wallpaperPreview = $derived(
+    settings.wallpaperPath ? convertFileSrc(settings.wallpaperPath) : null,
+  );
+
+  async function pickWallpaper() {
+    const chosen = await open({
+      multiple: false,
+      filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }],
+    });
+    if (typeof chosen !== "string") return;
+    try {
+      const path = await ipc.setWallpaper(chosen);
+      wallpaperError = null;
+      onChange({ ...settings, wallpaperPath: path });
+    } catch (err) {
+      wallpaperError = String(err);
+    }
+  }
+
+  async function removeWallpaper() {
+    await ipc.clearWallpaper();
+    onChange({ ...settings, wallpaperPath: null });
+  }
 </script>
 
 <div class="settings">
@@ -70,6 +100,29 @@
         <option value="ru">Русский</option>
       </select>
     </label>
+
+    {#if settings.theme === "dark"}
+      <div class="wallpaper">
+        <div class="wallpaper-main">
+          <span class="row-title">{t("settings.wallpaper")}</span>
+          <span class="row-sub">{t("settings.wallpaperHint")}</span>
+        </div>
+        {#if wallpaperPreview}
+          <img class="thumb" src={wallpaperPreview} alt="" />
+        {:else}
+          <div class="thumb thumb-empty">{t("settings.wallpaperNone")}</div>
+        {/if}
+        <div class="wallpaper-actions">
+          <button class="ghost" onclick={pickWallpaper}>{t("settings.wallpaperChoose")}</button>
+          {#if settings.wallpaperPath}
+            <button class="ghost" onclick={removeWallpaper}>{t("settings.wallpaperRemove")}</button>
+          {/if}
+        </div>
+      </div>
+      {#if wallpaperError}
+        <p class="error">{wallpaperError}</p>
+      {/if}
+    {/if}
   </section>
 
   <section class="card about">
@@ -173,6 +226,70 @@
   .choice select {
     margin-left: auto;
     width: 170px;
+  }
+
+  .wallpaper {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+  }
+
+  .wallpaper-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .thumb {
+    width: 56px;
+    height: 40px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    object-fit: cover;
+    flex: none;
+  }
+
+  .thumb-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 2px;
+    background: var(--bg-inset);
+  }
+
+  .wallpaper-actions {
+    display: flex;
+    gap: 6px;
+    flex: none;
+  }
+
+  .ghost {
+    border: 1px solid var(--border-strong);
+    padding: 7px 13px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 12.5px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .ghost:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .error {
+    margin: 0 0 12px;
+    padding: 9px 11px;
+    border-radius: var(--radius-sm);
+    background: var(--danger-soft);
+    color: var(--danger);
+    font-size: 13px;
   }
 
   .about p {
