@@ -209,6 +209,8 @@ The app never terminates the SOCKS5 session — it forwards it verbatim and read
 
 Closing the window quits the app rather than minimising it. The system tray backend GTK apps normally use (`libayatana-appindicator`) triggers a fatal Wayland protocol error on several desktops, killing the process about a second after launch, so it is not built on Linux at all. On Wayland the app also relaunches itself under XWayland at startup, which is the configuration the WebView is reliable on.
 
+WebKitGTK's DMA-BUF renderer is switched off by default here too. Left on, it leaves the window blank and prints `Failed to create GBM buffer … Invalid argument` on the NVIDIA proprietary driver, on virtualised GPUs, and anywhere else the DRM render node is not usable the way WebKit expects — it fails to draw at all rather than falling back. The software path is more than enough for charts and text. Set `WEBKIT_DISABLE_DMABUF_RENDERER=0` to take the accelerated path back if your system is fine with it.
+
 The tray still works normally on Windows, where "close to tray" appears in Settings.
 
 ---

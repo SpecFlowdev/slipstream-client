@@ -64,9 +64,39 @@ fn relaunch_under_x11_if_needed() {
     eprintln!("could not relaunch under X11 ({err}); continuing on the current backend");
 }
 
+/// Turns off WebKitGTK's DMA-BUF renderer, which leaves the window blank on
+/// a good number of Linux setups.
+///
+/// The symptom is an empty grey window and `Failed to create GBM buffer of
+/// size WxH: Invalid argument` on stderr: WebKit's accelerated path is
+/// asking the GPU for a buffer through GBM and being refused, then failing
+/// to draw anything at all rather than falling back. It shows up on the
+/// NVIDIA proprietary driver, on virtualised GPUs, and wherever the DRM
+/// render node is not usable in the way WebKit expects — none of which the
+/// app can do anything about from the outside.
+///
+/// The software path it falls back to is entirely adequate here: this
+/// window is charts, tables and text, not a compositor. A blank window is
+/// fatal, a slightly less accelerated one is not, so the trade is easy.
+///
+/// Unlike `GDK_BACKEND`, setting this from inside the process is enough —
+/// WebKit reads it when the web view is created, long after `main` starts,
+/// and the value is inherited by the WebKit subprocesses that do the actual
+/// rendering. Anyone who wants the accelerated path back can set the
+/// variable to `0` themselves and this leaves it alone.
+#[cfg(target_os = "linux")]
+fn disable_dmabuf_renderer_by_default() {
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+}
+
 fn main() {
     #[cfg(target_os = "linux")]
-    relaunch_under_x11_if_needed();
+    {
+        relaunch_under_x11_if_needed();
+        disable_dmabuf_renderer_by_default();
+    }
 
     slipstream_client_lib::run()
 }
