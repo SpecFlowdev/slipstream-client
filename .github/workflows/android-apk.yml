@@ -1,0 +1,136 @@
+name: Android APK
+
+# Builds the Android client end to end: the tunnel, the packet bridge, the
+# unit tests, and an installable APK.
+#
+# Both native pieces need an NDK, so this is the only place the app can
+# actually be built. Nothing here signs for release; the APK it produces is a
+# debug build, which installs on any device with unknown sources allowed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: slipstream-rust ref for the tunnel
+        default: v0.1.1
+      bridge_ref:
+        description: hev-socks5-tunnel ref for the packet bridge
+        default: 2.9.0
+      abis:
+        description: Space-separated Rust target triples
+        default: aarch64-linux-android armv7-linux-androideabi
+
+permissions:
+  contents: read
+
+env:
+  # Must match Bridge.kt: the native library registers its methods against
+  # this exact class, and a mismatch loads fine and then binds to nothing.
+  BRIDGE_PACKAGE: dev/specflow/slipstream/net
+  BRIDGE_CLASS: Bridge
+
+jobs:
+  build:
+    name: Build the Android client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out slipstream-rust
+        uses: actions/checkout@v5
+        with:
+          repository: Mygod/slipstream-rust
+          ref: ${{ inputs.upstream_ref }}
+          path: upstream
+          submodules: recursive
+
+      - name: Check out the packet bridge
+        uses: actions/checkout@v5
+        with:
+          repository: heiher/hev-socks5-tunnel
+          ref: ${{ inputs.bridge_ref }}
+          path: bridge
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Add the Android targets
+        run: |
+          for target in ${{ inputs.abis }}; do
+            rustup target add "${target}"
+          done
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: upstream
+
+      - name: Build the tunnel
+        run: |
+          ./scripts/build-android-engine.sh upstream \
+            "${PWD}/android/app/src/main/jniLibs" ${{ inputs.abis }}
+
+      - name: Build the packet bridge
+        run: |
+          set -euo pipefail
+          NDK="${ANDROID_NDK_LATEST_HOME:-}"
+          if [[ -z "${NDK}" || ! -d "${NDK}" ]]; then
+            NDK="$(ls -d "${ANDROID_SDK_ROOT}"/ndk/* | sort -V | tail -1)"
+          fi
+
+          # Android's ABI names, from the same triples the tunnel was built for.
+          ABIS=""
+          for target in ${{ inputs.abis }}; do
+            case "${target}" in
+              aarch64-linux-android)   ABIS="${ABIS} arm64-v8a" ;;
+              armv7-linux-androideabi) ABIS="${ABIS} armeabi-v7a" ;;
+              x86_64-linux-android)    ABIS="${ABIS} x86_64" ;;
+              i686-linux-android)      ABIS="${ABIS} x86" ;;
+            esac
+          done
+
+          cd bridge
+          "${NDK}/ndk-build" \
+            NDK_PROJECT_PATH=. \
+            APP_BUILD_SCRIPT=./Android.mk \
+            NDK_APPLICATION_MK=./Application.mk \
+            APP_ABI="${ABIS# }" \
+            APP_PLATFORM=android-24 \
+            APP_CFLAGS="-O3 -DPKGNAME=${BRIDGE_PACKAGE} -DCLSNAME=${BRIDGE_CLASS}"
+
+          for abi in ${ABIS}; do
+            mkdir -p "../android/app/src/main/jniLibs/${abi}"
+            cp "libs/${abi}/libhev-socks5-tunnel.so" \
+               "../android/app/src/main/jniLibs/${abi}/"
+          done
+          find ../android/app/src/main/jniLibs -name '*.so' -exec ls -la {} \;
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test
+        working-directory: android
+        run: gradle --no-daemon :app:testDebugUnitTest
+
+      - name: Assemble
+        working-directory: android
+        run: gradle --no-daemon :app:assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slipstream-android
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      - name: Test report
+        if: failure()
+        run: |
+          for report in android/app/build/reports/tests/**/*.txt \
+                        android/app/build/test-results/**/*.xml; do
+            [[ -f "${report}" ]] || continue
+            echo "===== ${report} ====="
+            tail -40 "${report}"
+          done

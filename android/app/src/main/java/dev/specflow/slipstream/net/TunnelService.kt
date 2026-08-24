@@ -151,7 +151,9 @@ class TunnelService : VpnService() {
             "Android would not grant the VPN interface"
         )
         tun = descriptor
-        engine.startBridge(descriptor.fd, server.port, settings.mtu)
+        if (!engine.startBridge(descriptor.fd, server.port, settings.mtu)) {
+            throw IllegalStateException("The packet bridge would not start")
+        }
 
         engine.onDied = { reason ->
             if (settings.autoReconnect && state.value.phase == Phase.ON) {

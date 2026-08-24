@@ -25,7 +25,7 @@ class Engine(private val context: Context) {
     private val lines = ArrayDeque<String>()
 
     private var tunnel: Process? = null
-    private var bridge: Process? = null
+    private val bridge = Bridge()
 
     @Volatile
     var onDied: ((String) -> Unit)? = null
@@ -44,7 +44,7 @@ class Engine(private val context: Context) {
     private fun binary(name: String): File =
         File(context.applicationInfo.nativeLibraryDir, name)
 
-    fun available(): Boolean = binary(TUNNEL).canExecute() && binary(BRIDGE).canExecute()
+    fun available(): Boolean = binary(TUNNEL).canExecute() && Bridge.available
 
     /**
      * Starts slipstream on a loopback port and returns that port.
@@ -80,11 +80,11 @@ class Engine(private val context: Context) {
     /**
      * Starts the packet bridge on the interface Android handed us.
      *
-     * It reads the tun descriptor directly, so the descriptor has to survive
-     * the fork: [ProcessBuilder] closes nothing it was not told to, and the
-     * number is passed as an argument.
+     * Only `socks5.address` and `socks5.port` are required; the tunnel section
+     * that would describe an interface is left out because we are handing it
+     * one that already exists.
      */
-    fun startBridge(tunFd: Int, socksPort: Int, mtu: Int) {
+    fun startBridge(tunFd: Int, socksPort: Int, mtu: Int): Boolean {
         val config = File(context.filesDir, "bridge.yaml")
         config.writeText(
             """
@@ -99,7 +99,12 @@ class Engine(private val context: Context) {
               log-level: warn
             """.trimIndent()
         )
-        bridge = spawn("bridge", listOf(binary(BRIDGE).absolutePath, config.absolutePath, tunFd.toString()))
+        record("$ bridge ${config.name} fd=$tunFd socks=$socksPort mtu=$mtu")
+        val started = runCatching { bridge.TProxyStartService(config.path, tunFd) }
+            .onFailure { record("[bridge] could not start: ${it.message}") }
+            .getOrDefault(false)
+        if (!started) record("[bridge] refused to start")
+        return started
     }
 
     private fun spawn(label: String, args: List<String>): Process {
@@ -134,10 +139,8 @@ class Engine(private val context: Context) {
 
     fun stop() {
         onDied = null
-        for (process in listOf(bridge, tunnel)) {
-            runCatching { process?.destroy() }
-        }
-        bridge = null
+        runCatching { bridge.TProxyStopService() }
+        runCatching { tunnel?.destroy() }
         tunnel = null
     }
 
@@ -145,8 +148,7 @@ class Engine(private val context: Context) {
         private const val TAG = "SlipstreamEngine"
         private const val LOG_LINES = 500
 
-        /** The names the build gives the two native programs inside the APK. */
+        /** The name the build gives the tunnel inside the APK. */
         const val TUNNEL = "libslipstream.so"
-        const val BRIDGE = "libbridge.so"
     }
 }
