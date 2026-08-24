@@ -124,6 +124,26 @@ jobs:
             export RANLIB_${SUFFIX}="${TOOLCHAIN}/llvm-ranlib"
             export CARGO_TARGET_${UPPER}_LINKER="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
 
+            # OpenSSL has to exist before picoquic is configured, and it has
+            # to be named outright. CMake's FindOpenSSL locates the headers
+            # from OPENSSL_ROOT_DIR but then looks for the library with
+            # find_library, which the NDK's toolchain file confines to the
+            # sysroot — so a vendored libcrypto.a sitting in cargo's target
+            # directory is invisible to it, and configuring stops at
+            # "missing: OPENSSL_CRYPTO_LIBRARY".
+            echo "::group::${target} openssl"
+            cargo build --release --target "${target}" -p openssl-sys --features vendored
+            echo "::endgroup::"
+
+            SSL_LIB="$(ls -d target/"${target}"/release/build/openssl-sys-*/out/openssl-build/install/lib 2>/dev/null | head -1)"
+            if [[ -n "${SSL_LIB}" && -f "${SSL_LIB}/libcrypto.a" ]]; then
+              export OPENSSL_CRYPTO_LIBRARY="${SSL_LIB}/libcrypto.a"
+              export OPENSSL_SSL_LIBRARY="${SSL_LIB}/libssl.a"
+              echo "OpenSSL for ${target}: ${SSL_LIB}"
+            else
+              echo "::warning::no vendored OpenSSL found for ${target}; letting CMake search"
+            fi
+
             echo "::group::${target}"
             # openssl-vendored builds OpenSSL from source for the target, so
             # the host's copy is not dragged in. The output is kept because a
