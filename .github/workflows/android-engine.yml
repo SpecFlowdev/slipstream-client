@@ -47,15 +47,21 @@ jobs:
             rustup target add "${target}"
           done
 
-      # The runner ships an SDK; the NDK is what actually matters here, and
-      # pinning it keeps a green build from silently becoming a red one when
-      # the image moves on.
-      - name: Set up the NDK
+      # The image ships its own NDK. An action that downloads another one was
+      # tried first and left a broken `clang` symlink behind, so the build died
+      # on "No such file or directory" for a compiler that was right there.
+      - name: Find the NDK
         id: ndk
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27c
-          local-cache: true
+        run: |
+          set -euo pipefail
+          NDK="${ANDROID_NDK_LATEST_HOME:-}"
+          if [[ -z "${NDK}" || ! -d "${NDK}" ]]; then
+            NDK="$(ls -d "${ANDROID_SDK_ROOT}"/ndk/* 2>/dev/null | sort -V | tail -1)"
+          fi
+          [[ -n "${NDK}" && -d "${NDK}" ]] || { echo "::error::no NDK on this image"; exit 1; }
+          echo "Using ${NDK}"
+          "${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
+          echo "path=${NDK}" >> "${GITHUB_OUTPUT}"
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -63,7 +69,7 @@ jobs:
 
       - name: Build
         env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.path }}
         working-directory: upstream
         run: |
           set -euo pipefail
