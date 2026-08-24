@@ -37,6 +37,8 @@ jobs:
           repository: Mygod/slipstream-rust
           ref: ${{ inputs.ref }}
           path: upstream
+          # picoquic is a submodule, and it is what actually gets compiled.
+          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -99,13 +101,20 @@ jobs:
 
           IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
           for target in "${TARGETS[@]}"; do
+            # picoquic is built by CMake through the NDK's own toolchain file,
+            # which wants Android's ABI names rather than Rust's target triples.
             case "${target}" in
-              aarch64-linux-android)     CLANG_PREFIX=aarch64-linux-android ;;
-              armv7-linux-androideabi)   CLANG_PREFIX=armv7a-linux-androideabi ;;
-              x86_64-linux-android)      CLANG_PREFIX=x86_64-linux-android ;;
-              i686-linux-android)        CLANG_PREFIX=i686-linux-android ;;
+              aarch64-linux-android)     CLANG_PREFIX=aarch64-linux-android;   ABI=arm64-v8a ;;
+              armv7-linux-androideabi)   CLANG_PREFIX=armv7a-linux-androideabi; ABI=armeabi-v7a ;;
+              x86_64-linux-android)      CLANG_PREFIX=x86_64-linux-android;    ABI=x86_64 ;;
+              i686-linux-android)        CLANG_PREFIX=i686-linux-android;      ABI=x86 ;;
               *) echo "Unknown target ${target}"; exit 1 ;;
             esac
+            export ANDROID_ABI="${ABI}"
+            export ANDROID_PLATFORM="android-${API}"
+            # One build directory per ABI. The default is shared, so the second
+            # target would otherwise link the first one's objects.
+            export PICOQUIC_BUILD_DIR="${PWD}/.picoquic-build/${target}"
 
             UPPER="$(echo "${target}" | tr 'a-z-' 'A-Z_')"
             SUFFIX="${target//-/_}"
@@ -121,7 +130,7 @@ jobs:
             cargo build --release \
               --target "${target}" \
               -p slipstream-client \
-              --features slipstream-ffi/openssl-vendored || {
+              --features slipstream-ffi/openssl-vendored,slipstream-ffi/picoquic-minimal-build || {
                 echo "::error::${target} failed"; exit 1; }
             echo "::endgroup::"
 
