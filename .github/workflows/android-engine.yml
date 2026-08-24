@@ -142,7 +142,10 @@ jobs:
             fi
             echo "::endgroup::"
 
-            SSL_LIB="$(ls -d target/"${target}"/release/build/openssl-sys-*/out/openssl-build/install/lib 2>/dev/null | head -1)"
+            # `|| true` matters: a command substitution that fails is enough
+            # for `set -e` to end the step, so a missing directory here would
+            # abort the job rather than fall through to the warning below.
+            SSL_LIB="$(ls -d target/"${target}"/release/build/openssl-sys-*/out/openssl-build/install/lib 2>/dev/null | head -1 || true)"
             if [[ -n "${SSL_LIB}" && -f "${SSL_LIB}/libcrypto.a" ]]; then
               export OPENSSL_CRYPTO_LIBRARY="${SSL_LIB}/libcrypto.a"
               export OPENSSL_SSL_LIBRARY="${SSL_LIB}/libssl.a"
