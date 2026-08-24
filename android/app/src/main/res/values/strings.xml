@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Slipstream</string>
+
+    <string name="tab_home">Tunnel</string>
+    <string name="tab_servers">Servers</string>
+    <string name="tab_traffic">Traffic</string>
+    <string name="tab_rules">Rules</string>
+    <string name="tab_settings">Settings</string>
+
+    <string name="notification_channel">Tunnel</string>
+    <string name="notification_channel_description">Shows the tunnel while it is running</string>
+    <string name="disconnect">Disconnect</string>
+</resources>
