@@ -1,0 +1,121 @@
+name: Android engine
+
+# Proves the one thing an Android client depends on and nothing else can be
+# decided without: whether the tunnel engine cross-compiles for Android.
+#
+# slipstream-rust is Rust around a vendored picoquic (C) plus OpenSSL, built
+# through the `cc` crate rather than CMake, and it carries a build/android.rs
+# of its own — so this should work. "Should" is not evidence, hence this
+# workflow: it builds the real thing with the real NDK and uploads whatever
+# comes out.
+#
+# Run it from the Actions tab. It touches nothing in the repository.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Upstream slipstream-rust ref to build
+        default: v0.1.1
+      abis:
+        description: Comma-separated Android targets
+        default: aarch64-linux-android,armv7-linux-androideabi
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Cross-compile the tunnel for Android
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out slipstream-rust
+        uses: actions/checkout@v5
+        with:
+          repository: Mygod/slipstream-rust
+          ref: ${{ inputs.ref }}
+          path: upstream
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Add the Android targets
+        run: |
+          IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
+          for target in "${TARGETS[@]}"; do
+            rustup target add "${target}"
+          done
+
+      # The runner ships an SDK; the NDK is what actually matters here, and
+      # pinning it keeps a green build from silently becoming a red one when
+      # the image moves on.
+      - name: Set up the NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27c
+          local-cache: true
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: upstream
+
+      - name: Build
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        working-directory: upstream
+        run: |
+          set -euo pipefail
+          TOOLCHAIN="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          echo "Toolchain: ${TOOLCHAIN}"
+          ls "${TOOLCHAIN}" | head -20
+
+          # API 24 is the floor for the socket calls picoquic uses, and is old
+          # enough to cover any device likely to run this.
+          API=24
+
+          IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
+          for target in "${TARGETS[@]}"; do
+            case "${target}" in
+              aarch64-linux-android)     CLANG_PREFIX=aarch64-linux-android ;;
+              armv7-linux-androideabi)   CLANG_PREFIX=armv7a-linux-androideabi ;;
+              x86_64-linux-android)      CLANG_PREFIX=x86_64-linux-android ;;
+              i686-linux-android)        CLANG_PREFIX=i686-linux-android ;;
+              *) echo "Unknown target ${target}"; exit 1 ;;
+            esac
+
+            UPPER="$(echo "${target}" | tr 'a-z-' 'A-Z_')"
+            export CC_${target//-/_}="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
+            export AR_${target//-/_}="${TOOLCHAIN}/llvm-ar"
+            export CARGO_TARGET_${UPPER}_LINKER="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
+
+            echo "::group::${target}"
+            # openssl-vendored builds OpenSSL from source for the target, so
+            # the host's copy is not dragged in.
+            cargo build --release \
+              --target "${target}" \
+              -p slipstream-client \
+              --features slipstream-ffi/openssl-vendored || {
+                echo "::error::${target} failed"; exit 1; }
+            echo "::endgroup::"
+
+            file "target/${target}/release/slipstream-client" || true
+          done
+
+      - name: Collect
+        working-directory: upstream
+        run: |
+          mkdir -p ../out
+          IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
+          for target in "${TARGETS[@]}"; do
+            cp "target/${target}/release/slipstream-client" \
+               "../out/slipstream-client-${target}" 2>/dev/null || true
+          done
+          ls -la ../out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-engine
+          path: out/
+          if-no-files-found: error
