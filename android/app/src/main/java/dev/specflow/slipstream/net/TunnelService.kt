@@ -181,16 +181,21 @@ class TunnelService : VpnService() {
             builder.addAddress(TUN_ADDRESS6, 126).addRoute("::", 0)
         }
 
-        // Our own traffic must not be carried by the interface it is carrying.
-        runCatching { builder.addDisallowedApplication(packageName) }
-
+        // An interface is either a list of apps to carry or a list to leave
+        // out; asking for both throws. So our own package is excluded by being
+        // named in the second list, or simply by being absent from the first.
         val installed = packageManager.getInstalledApplications(0).map { it.packageName }.toSet()
-        if (settings.allowedApps.isNotEmpty()) {
-            for (app in settings.allowedApps) {
-                if (app == packageName || app !in installed) continue
+        val allowed = settings.allowedApps.filter { it != packageName && it in installed }
+
+        if (allowed.isNotEmpty()) {
+            for (app in allowed) {
                 runCatching { builder.addAllowedApplication(app) }
             }
         } else {
+            // Our own traffic must not be carried by the interface carrying
+            // it: the tunnel's packets to the resolver would be captured by
+            // the thing they are meant to be creating.
+            runCatching { builder.addDisallowedApplication(packageName) }
             for (app in settings.blockedApps) {
                 if (app == packageName || app !in installed) continue
                 runCatching { builder.addDisallowedApplication(app) }
