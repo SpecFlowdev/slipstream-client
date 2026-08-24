@@ -20,6 +20,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::Profile;
 use crate::meter::{self, Counters};
+use crate::rules::RuleSet;
 use crate::traffic::{Registry, TrafficSnapshot};
 
 const LOG_CAPACITY: usize = 2000;
@@ -55,6 +56,8 @@ pub struct Status {
     pub peak_rate_down: u64,
     /// Where the traffic went, from the SOCKS5 requests the relay forwards.
     pub traffic: TrafficSnapshot,
+    /// Connections a routing rule refused this session.
+    pub blocked: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -100,6 +103,9 @@ pub struct TunnelState {
     /// `#[derive(Default)]`; `run()` sets the real value from Settings before
     /// any connection can start.
     pub kill_switch: Arc<AtomicBool>,
+    /// Shared with the relay, so editing a rule takes effect on the session
+    /// already running rather than only on the next connect.
+    pub rules: Arc<std::sync::RwLock<RuleSet>>,
 }
 
 impl TunnelState {
@@ -120,6 +126,7 @@ impl TunnelState {
                 peak_rate_up: 0,
                 peak_rate_down: 0,
                 traffic: TrafficSnapshot::default(),
+                blocked: self.rules.read().unwrap().blocked_count(),
             };
         };
         let (bytes_up, bytes_down, active) = session.counters.snapshot();
@@ -139,6 +146,7 @@ impl TunnelState {
             peak_rate_up: session.peak_rate_up,
             peak_rate_down: session.peak_rate_down,
             traffic: session.registry.snapshot(),
+            blocked: self.rules.read().unwrap().blocked_count(),
         }
     }
 
@@ -335,6 +343,7 @@ pub async fn connect(app: AppHandle, profile: Profile, system_proxy: bool) -> Re
         connected_rx,
         state.kill_switch.clone(),
         registry.clone(),
+        state.rules.clone(),
     ));
 
     {
@@ -452,6 +461,35 @@ pub async fn connect(app: AppHandle, profile: Profile, system_proxy: bool) -> Re
     Ok(())
 }
 
+/// Files a finished session in the history the interface shows. Reads the
+/// counters one last time before the session is dropped, since after that the
+/// figures are gone.
+fn record_session(app: &AppHandle, session: &Session) {
+    let Some(store) = app.try_state::<Arc<crate::config::Store>>() else {
+        return;
+    };
+    let (bytes_up, bytes_down, _) = session.counters.snapshot();
+    let name = store
+        .profile(&session.profile_id)
+        .map(|p| p.name)
+        .unwrap_or_else(|| "Unknown".to_string());
+    store.record_session(crate::config::SessionRecord {
+        ended_ms: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+        profile_name: name,
+        seconds: session
+            .connected_since
+            .map(|t| t.elapsed().as_secs())
+            .unwrap_or(0),
+        bytes_up,
+        bytes_down,
+        peak_rate_down: session.peak_rate_down,
+        connections: session.registry.snapshot().total_connections,
+    });
+}
+
 /// Tears the session down from a context that cannot await, used on the way
 /// out of the process. Only the parts that must not be skipped run here: the
 /// child process is killed and the system proxy is put back.
@@ -474,6 +512,9 @@ pub async fn disconnect(app: AppHandle) {
     let session = state.session.lock().unwrap().take();
     if let Some(session) = session {
         session.cancel.cancel();
+        // Read the counters before `kill` consumes the child out of the
+        // session; afterwards the session is only partially there.
+        record_session(&app, &session);
         let _ = session.child.kill();
         if let Some(saved) = &session.saved_proxy {
             crate::sysproxy::restore(saved);

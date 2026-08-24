@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { LogLine, Profile, Settings, Status } from "./types";
+import type { LogLine, Profile, Rule, SessionRecord, Settings, Status } from "./types";
 
 export const listProfiles = () => invoke<Profile[]>("list_profiles");
 export const saveProfile = (profile: Profile) => invoke<Profile>("save_profile", { profile });
@@ -15,6 +15,13 @@ export const clearLogs = () => invoke<void>("clear_logs");
 
 export const getSettings = () => invoke<Settings>("get_settings");
 export const saveSettings = (settings: Settings) => invoke<Settings>("save_settings", { settings });
+
+export const listRules = () => invoke<Rule[]>("list_rules");
+/** Saves the rules and applies them to the running relay straight away. */
+export const saveRules = (rules: Rule[]) => invoke<Rule[]>("save_rules", { rules });
+
+export const getHistory = () => invoke<SessionRecord[]>("get_history");
+export const clearHistory = () => invoke<void>("clear_history");
 
 /** Reads a certificate file chosen by the user and returns its PEM contents. */
 export const readCertFile = (path: string) => invoke<string>("read_cert_file", { path });

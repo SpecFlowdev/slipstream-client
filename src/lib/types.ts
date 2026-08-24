@@ -45,6 +45,8 @@ export interface ConnectionRow {
   bytesDown: number;
   ageSecs: number;
   startedMs: number;
+  /** Refused by a routing rule rather than carrying traffic. */
+  blocked: boolean;
 }
 
 /** Everything sent to one destination this session. */
@@ -61,6 +63,31 @@ export interface TrafficSnapshot {
   topHosts: HostRow[];
   distinctHosts: number;
   totalConnections: number;
+}
+
+export type RuleAction = "allow" | "block";
+
+/** One routing rule. The first rule whose pattern matches a destination wins. */
+export interface Rule {
+  /**
+   * `example.com` matches that host exactly, `*.example.com` matches its
+   * subdomains but not the domain itself, and `*` matches everything.
+   */
+  pattern: string;
+  action: RuleAction;
+  enabled: boolean;
+  note: string;
+}
+
+/** A finished session, kept so the app shows more than the current one. */
+export interface SessionRecord {
+  endedMs: number;
+  profileName: string;
+  seconds: number;
+  bytesUp: number;
+  bytesDown: number;
+  peakRateDown: number;
+  connections: number;
 }
 
 export interface Status {
@@ -80,6 +107,8 @@ export interface Status {
   peakRateUp: number;
   peakRateDown: number;
   traffic: TrafficSnapshot;
+  /** Connections a routing rule refused this session. */
+  blocked: number;
 }
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
@@ -138,6 +167,7 @@ export const EMPTY_STATUS: Status = {
   peakRateUp: 0,
   peakRateDown: 0,
   traffic: EMPTY_TRAFFIC,
+  blocked: 0,
 };
 
 export function blankProfile(): Profile {
@@ -155,4 +185,8 @@ export function blankProfile(): Profile {
     keepAliveMs: 400,
     authoritative: "",
   };
+}
+
+export function blankRule(): Rule {
+  return { pattern: "", action: "block", enabled: true, note: "" };
 }

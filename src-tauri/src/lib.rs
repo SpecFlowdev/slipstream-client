@@ -1,5 +1,6 @@
 mod config;
 mod meter;
+mod rules;
 mod sysproxy;
 mod traffic;
 mod tunnel;
@@ -11,7 +12,8 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, State};
 
-use config::{Profile, Settings, Store};
+use config::{Profile, SessionRecord, Settings, Store};
+use rules::Rule;
 use tunnel::{LogLine, Status, TunnelState};
 
 #[tauri::command]
@@ -46,6 +48,34 @@ fn save_settings(
         .kill_switch
         .store(saved.kill_switch, Ordering::Relaxed);
     Ok(saved)
+}
+
+#[tauri::command]
+fn list_rules(store: State<'_, Arc<Store>>) -> Vec<Rule> {
+    store.rules()
+}
+
+/// Saves the rule list and hands it straight to the running relay, so a rule
+/// takes effect on connections opened from now on without a reconnect.
+#[tauri::command]
+fn save_rules(
+    store: State<'_, Arc<Store>>,
+    tunnel_state: State<'_, Arc<TunnelState>>,
+    rules: Vec<Rule>,
+) -> Result<Vec<Rule>, String> {
+    let saved = store.save_rules(rules)?;
+    tunnel_state.rules.write().unwrap().replace(saved.clone());
+    Ok(saved)
+}
+
+#[tauri::command]
+fn get_history(store: State<'_, Arc<Store>>) -> Vec<SessionRecord> {
+    store.history()
+}
+
+#[tauri::command]
+fn clear_history(store: State<'_, Arc<Store>>) -> Result<(), String> {
+    store.clear_history()
 }
 
 #[tauri::command]
@@ -226,6 +256,7 @@ pub fn run() {
             tunnel_state
                 .kill_switch
                 .store(store.settings().kill_switch, Ordering::Relaxed);
+            tunnel_state.rules.write().unwrap().replace(store.rules());
             app.manage(store.clone());
             app.manage(tunnel_state);
 
@@ -279,6 +310,10 @@ pub fn run() {
             get_logs,
             clear_logs,
             read_cert_file,
+            list_rules,
+            save_rules,
+            get_history,
+            clear_history,
             set_wallpaper,
             clear_wallpaper,
             connect,

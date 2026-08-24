@@ -73,6 +73,22 @@ Destinations are read out of the SOCKS5 requests already passing through the app
   </tr>
 </table>
 
+### Rules that actually refuse traffic
+
+Because the relay reads the destination out of every SOCKS5 request it forwards, it can also **refuse the connection before a single byte of payload moves**. That is a real filter, not a display: a blocked host gets a closed socket.
+
+| Pattern | Matches |
+| --- | --- |
+| `example.com` | that host exactly |
+| `*.example.com` | its subdomains, but not `example.com` itself — and never `notexample.com` |
+| `*` | everything, useful as a last-resort default |
+
+The first matching rule wins, so an `allow` above a broad `block` is how an exception is written. Rules apply to the tunnel already running — no reconnect — and a rule can be switched off without deleting it.
+
+<div align="center">
+  <img src="assets/screenshot-rules.png" alt="Routing rules" width="100%">
+</div>
+
 ### Tuning that reaches the engine
 
 The performance controls are the tunnel binary's own flags, not decoration:
@@ -95,6 +111,7 @@ Values are validated against what the binary actually accepts, so a bad setting 
 - **Server profiles** — domain, resolver, pinned certificate, local port, proxy credentials and tuning, stored per server. Paste a certificate's contents straight in, or pick the file
 - **Kill switch** — refuses new connections and drops active ones on this app's SOCKS5 port whenever the tunnel is not connected, so it fails closed instead of quietly hanging
 - **System proxy** — optionally points this computer's own proxy setting at the tunnel while connected and restores it on disconnect, so applications need no setup of their own *(see the note on TUN below)*
+- **Session history** — every finished session is kept with its duration, totals and peak rate, so the app shows more than the one running now
 - **Log viewer** — the tunnel's own output, filtered by level, with follow-the-tail
 - **Three themes and two languages** — dark gray, blue or light, English or Russian, each following the system or pinned
 - **Custom wallpaper** — any image, in any theme, with dim and blur controls so the interface stays readable over it. The shots below are generated ones; drop your own into `assets/wallpapers/` and `scripts/screenshots.mjs` will capture the panel with it

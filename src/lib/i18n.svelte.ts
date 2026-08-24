@@ -15,6 +15,37 @@ const en = {
   "nav.logs": "Logs",
   "nav.settings": "Settings",
 
+  "nav.rules": "Rules",
+
+  "rules.title": "Routing rules",
+  "rules.intro":
+    "Every connection states its destination in the SOCKS5 request this app forwards, so it can be refused before any traffic moves. The first matching rule wins; anything unmatched is allowed.",
+  "rules.blockedCount": "blocked this session",
+  "rules.pattern": "Pattern",
+  "rules.action": "Action",
+  "rules.note": "Note",
+  "rules.notePlaceholder": "why this is here",
+  "rules.block": "Block",
+  "rules.allow": "Allow",
+  "rules.add": "Add a rule",
+  "rules.enable": "Enable",
+  "rules.disable": "Disable",
+  "rules.moveUp": "Move up",
+  "rules.moveDown": "Move down",
+  "rules.unsaved": "Unsaved changes",
+  "rules.orderHint":
+    "`example.com` exactly · `*.example.com` its subdomains · `*` everything",
+  "rules.emptyTitle": "No rules yet",
+  "rules.emptyBody":
+    "Add a pattern to refuse connections to it, or start from a list below. Rules apply to the running tunnel straight away — no reconnect.",
+  "rules.starterTrackers": "Block common trackers",
+  "rules.starterLocal": "Block local addresses",
+
+  "traffic.history": "Past sessions",
+  "traffic.noHistory": "No finished sessions yet.",
+  "traffic.clearHistory": "Clear",
+  "traffic.blockedTile": "Blocked",
+
   "traffic.lastMinute": "last 60 s",
   "traffic.received": "received",
   "traffic.sent": "sent",
@@ -166,6 +197,37 @@ const ru: Record<Key, string> = {
   "nav.servers": "Серверы",
   "nav.logs": "Логи",
   "nav.settings": "Настройки",
+
+  "nav.rules": "Правила",
+
+  "rules.title": "Правила маршрутизации",
+  "rules.intro":
+    "Каждое соединение называет адрес назначения в SOCKS5-запросе, который это приложение и так пересылает, — значит его можно отклонить до того, как пойдёт трафик. Побеждает первое подошедшее правило; всё, что не совпало, разрешено.",
+  "rules.blockedCount": "заблокировано за сессию",
+  "rules.pattern": "Шаблон",
+  "rules.action": "Действие",
+  "rules.note": "Заметка",
+  "rules.notePlaceholder": "зачем это здесь",
+  "rules.block": "Блокировать",
+  "rules.allow": "Разрешить",
+  "rules.add": "Добавить правило",
+  "rules.enable": "Включить",
+  "rules.disable": "Выключить",
+  "rules.moveUp": "Выше",
+  "rules.moveDown": "Ниже",
+  "rules.unsaved": "Есть несохранённые изменения",
+  "rules.orderHint":
+    "`example.com` точное совпадение · `*.example.com` его поддомены · `*` всё подряд",
+  "rules.emptyTitle": "Правил пока нет",
+  "rules.emptyBody":
+    "Добавьте шаблон, чтобы отклонять соединения к нему, или начните с готового списка ниже. Правила применяются к уже поднятому туннелю сразу — переподключаться не нужно.",
+  "rules.starterTrackers": "Блокировать частые трекеры",
+  "rules.starterLocal": "Блокировать локальные адреса",
+
+  "traffic.history": "Прошлые сессии",
+  "traffic.noHistory": "Завершённых сессий пока нет.",
+  "traffic.clearHistory": "Очистить",
+  "traffic.blockedTile": "Заблокировано",
 
   "traffic.lastMinute": "последние 60 с",
   "traffic.received": "принято",

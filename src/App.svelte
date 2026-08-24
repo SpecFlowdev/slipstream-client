@@ -3,21 +3,23 @@
   import { convertFileSrc } from "@tauri-apps/api/core";
   import Connection from "./lib/components/Connection.svelte";
   import Traffic from "./lib/components/Traffic.svelte";
+  import Rules from "./lib/components/Rules.svelte";
   import Profiles from "./lib/components/Profiles.svelte";
   import Logs from "./lib/components/Logs.svelte";
   import Settings from "./lib/components/Settings.svelte";
   import * as ipc from "./lib/ipc";
   import { setLanguage, t } from "./lib/i18n.svelte";
-  import { blankProfile, EMPTY_STATUS, type LogLine, type Profile, type Settings as Prefs, type Status } from "./lib/types";
+  import { blankProfile, EMPTY_STATUS, type LogLine, type Profile, type Rule, type SessionRecord, type Settings as Prefs, type Status } from "./lib/types";
 
-  const VERSION = "0.1.7";
+  const VERSION = "0.2.0";
   const SAMPLES = 60;
 
-  type Tab = "connection" | "traffic" | "servers" | "logs" | "settings";
+  type Tab = "connection" | "traffic" | "rules" | "servers" | "logs" | "settings";
 
   const TABS = [
     { id: "connection", label: "nav.connection" },
     { id: "traffic", label: "nav.traffic" },
+    { id: "rules", label: "nav.rules" },
     { id: "servers", label: "nav.servers" },
     { id: "logs", label: "nav.logs" },
     { id: "settings", label: "nav.settings" },
@@ -42,6 +44,8 @@
     animations: true,
   });
   let editing = $state<Profile | null>(null);
+  let rules = $state<Rule[]>([]);
+  let history = $state<SessionRecord[]>([]);
 
   let upSamples = $state<number[]>(new Array(SAMPLES).fill(0));
   let downSamples = $state<number[]>(new Array(SAMPLES).fill(0));
@@ -54,12 +58,16 @@
       profiles = await ipc.listProfiles();
       prefs = await ipc.getSettings();
       logs = await ipc.getLogs();
+      rules = await ipc.listRules();
+      history = await ipc.getHistory();
       status = await ipc.getStatus();
       selectedId = status.profileId ?? profiles[0]?.id ?? null;
 
       stops.push(
         await ipc.onStatus((next) => {
+          const ended = status.state === "connected" && next.state === "disconnected";
           status = next;
+          if (ended) ipc.getHistory().then((h) => (history = h));
           if (next.profileId) selectedId = next.profileId;
           upSamples = [...upSamples.slice(1), next.rateUp];
           downSamples = [...downSamples.slice(1), next.rateDown];
@@ -147,6 +155,15 @@
     downSamples = new Array(SAMPLES).fill(0);
   }
 
+  async function saveRules(next: Rule[]): Promise<string | null> {
+    try {
+      rules = await ipc.saveRules(next);
+      return null;
+    } catch (err) {
+      return String(err);
+    }
+  }
+
   async function updateSettings(next: Prefs) {
     prefs = await ipc.saveSettings(next);
   }
@@ -170,6 +187,9 @@
               <path d="M2.5 11h3l1.6-4.5 2.6 8 1.8-6 1.4 2.5h4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
             {:else if item.id === "traffic"}
               <path d="M3 16.5V12M7.5 16.5V7M12 16.5v-6.5M16.5 16.5V4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            {:else if item.id === "rules"}
+              <path d="M10 2.6l6.4 2.5v5.1c0 4.2-2.7 7.6-6.4 8.5-3.7-.9-6.4-4.3-6.4-8.5V5.1L10 2.6z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              <path d="M7.4 10.2l2 2 3.4-3.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
             {:else if item.id === "servers"}
               <rect x="3" y="3.5" width="14" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.5" />
               <rect x="3" y="11" width="14" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.5" />
@@ -209,7 +229,16 @@
         }}
       />
     {:else if tab === "traffic"}
-      <Traffic {status} {upSamples} {downSamples} animated={prefs.animations} />
+      <Traffic
+        {status}
+        {upSamples}
+        {downSamples}
+        {history}
+        animated={prefs.animations}
+        onClearHistory={async () => { await ipc.clearHistory(); history = []; }}
+      />
+    {:else if tab === "rules"}
+      <Rules {rules} blocked={status.blocked} onSave={saveRules} />
     {:else if tab === "servers"}
       <Profiles
         {profiles}

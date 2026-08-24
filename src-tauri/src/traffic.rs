@@ -192,6 +192,7 @@ pub struct ConnCounters {
 
 struct Live {
     target: Option<Target>,
+    blocked: bool,
     started: Instant,
     started_ms: u64,
     counters: Arc<ConnCounters>,
@@ -216,6 +217,8 @@ pub struct ConnectionRow {
     pub bytes_down: u64,
     pub age_secs: u64,
     pub started_ms: u64,
+    /// Refused by a routing rule rather than carrying traffic.
+    pub blocked: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -269,6 +272,7 @@ impl Registry {
             id,
             Live {
                 target: None,
+                blocked: false,
                 started: Instant::now(),
                 started_ms: SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -284,6 +288,15 @@ impl Registry {
         let mut guard = self.inner.lock().unwrap();
         if let Some(live) = guard.live.get_mut(&id) {
             live.target = Some(target);
+        }
+    }
+
+    /// Flags a connection the rules refused, so the interface can show it as
+    /// blocked rather than as a connection that simply ended.
+    pub fn mark_blocked(&self, id: u64) {
+        let mut guard = self.inner.lock().unwrap();
+        if let Some(live) = guard.live.get_mut(&id) {
+            live.blocked = true;
         }
     }
 
@@ -329,6 +342,7 @@ impl Registry {
                 bytes_down: down,
                 age_secs: live.started.elapsed().as_secs(),
                 started_ms: live.started_ms,
+                blocked: live.blocked,
             });
         }
         connections.sort_by(|a, b| {

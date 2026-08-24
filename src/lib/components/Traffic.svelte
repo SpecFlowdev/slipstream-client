@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Status } from "../types";
+  import type { SessionRecord, Status } from "../types";
   import { bytes, duration, rate } from "../format";
   import { t } from "../i18n.svelte";
   import AreaChart from "./AreaChart.svelte";
@@ -10,9 +10,20 @@
     upSamples: number[];
     downSamples: number[];
     animated: boolean;
+    history: SessionRecord[];
+    onClearHistory: () => void;
   }
 
-  let { status, upSamples, downSamples, animated }: Props = $props();
+  let { status, upSamples, downSamples, animated, history, onClearHistory }: Props = $props();
+
+  /** Newest first, and only as many as stay readable without a scrollbar war. */
+  let recent = $derived([...history].reverse().slice(0, 12));
+
+  function when(ms: number): string {
+    const d = new Date(ms);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${pad(d.getDate())}.${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
 
   let live = $derived(status.state === "connected" || status.state === "reconnecting");
   let traffic = $derived(status.traffic);
@@ -32,6 +43,11 @@
     { label: t("traffic.avgUp"), value: rate(averageUp), tone: "muted" },
     { label: t("traffic.destinations"), value: String(traffic.distinctHosts), tone: "muted" },
     { label: t("traffic.sessionConns"), value: String(traffic.totalConnections), tone: "muted" },
+    // Only once something has actually been refused: six tiles fill two rows
+    // evenly, and a permanent "Blocked 0" is noise for anyone not using rules.
+    ...(status.blocked > 0
+      ? [{ label: t("traffic.blockedTile"), value: String(status.blocked), tone: "blocked" }]
+      : []),
   ]);
 </script>
 
@@ -110,6 +126,28 @@
         {/if}
       </section>
     </div>
+
+    {#if history.length > 0}
+      <section class="card panel">
+        <h2>
+          {t("traffic.history")}
+          <span class="count">{history.length}</span>
+          <button class="clear" onclick={onClearHistory}>{t("traffic.clearHistory")}</button>
+        </h2>
+        <div class="table">
+          {#each recent as row (row.endedMs)}
+            <div class="past">
+              <span class="past-when">{when(row.endedMs)}</span>
+              <span class="past-name" title={row.profileName}>{row.profileName}</span>
+              <span class="past-dur">{duration(row.seconds)}</span>
+              <span class="conn-bytes down">↓ {bytes(row.bytesDown)}</span>
+              <span class="conn-bytes up">↑ {bytes(row.bytesUp)}</span>
+              <span class="past-peak">{rate(row.peakRateDown)}</span>
+            </div>
+          {/each}
+        </div>
+      </section>
+    {/if}
   {/if}
 </div>
 
@@ -235,6 +273,7 @@
 
   .tile-value[data-tone="down"] { color: var(--accent); }
   .tile-value[data-tone="up"] { color: var(--success); }
+  .tile-value[data-tone="blocked"] { color: var(--danger); }
 
   .split {
     display: grid;
@@ -320,6 +359,43 @@
 
   .conn-bytes.down { color: var(--accent); }
   .conn-bytes.up { color: var(--success); }
+
+  .past {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto auto;
+    align-items: baseline;
+    gap: 12px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+  }
+
+  .past:nth-child(odd) { background: var(--bg-inset); }
+
+  .past-when, .past-dur, .past-peak {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-faint);
+    flex: none;
+  }
+
+  .past-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .clear {
+    margin-left: auto;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
+  .clear:hover { color: var(--danger); background: var(--danger-soft); }
 
   .conn-age {
     font-family: var(--mono);

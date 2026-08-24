@@ -91,13 +91,29 @@ const traffic = {
   totalConnections: 137,
 };
 
+const RULES = [
+  { pattern: "*.doubleclick.net", action: "block", enabled: true, note: "ad exchange" },
+  { pattern: "*.google-analytics.com", action: "block", enabled: true, note: "" },
+  { pattern: "*.scorecardresearch.com", action: "block", enabled: true, note: "" },
+  { pattern: "status.example.com", action: "allow", enabled: true, note: "exception, checked first" },
+  { pattern: "*.example.com", action: "block", enabled: true, note: "" },
+  { pattern: "metrics.internal", action: "block", enabled: false, note: "off for now" },
+];
+
+const HISTORY = [
+  { endedMs: Date.now() - 172800000, profileName: "Home server", seconds: 5310, bytesDown: 412_000_000, bytesUp: 38_000_000, peakRateDown: 4_100_000, connections: 812 },
+  { endedMs: Date.now() - 86400000, profileName: "Office box", seconds: 1840, bytesDown: 96_000_000, bytesUp: 12_000_000, peakRateDown: 2_600_000, connections: 194 },
+  { endedMs: Date.now() - 43200000, profileName: "Home server", seconds: 7620, bytesDown: 733_000_000, bytesUp: 51_000_000, peakRateDown: 5_300_000, connections: 1441 },
+  { endedMs: Date.now() - 3600000, profileName: "Home server", seconds: 2447, bytesDown: 38_500_000, bytesUp: 4_900_000, peakRateDown: 3_900_000, connections: 137 },
+];
+
 const STATUS = {
   state: "connected", profileId: "1",
   rateDown: 1_580_000, rateUp: 210_000,
   bytesDown: 38_500_000, bytesUp: 4_900_000,
   activeConnections: 5, uptimeSecs: 2447,
   peakRateDown: 3_900_000, peakRateUp: 720_000,
-  message: null, traffic,
+  message: null, traffic, blocked: 27,
 };
 
 const LOGS = [
@@ -219,7 +235,7 @@ async function session({ theme, language = "en", wallpaper = null, dim = 55, blu
     deviceScaleFactor: 2,
   });
   await page.addInitScript(
-    ({ profiles, status, logs, theme, language, wallpaper, dim, blur }) => {
+    ({ profiles, status, logs, rules, history, theme, language, wallpaper, dim, blur }) => {
       const callbacks = {};
       const listeners = {};
       let next = 0;
@@ -241,6 +257,10 @@ async function session({ theme, language = "en", wallpaper = null, dim = 55, blu
           if (cmd === "list_profiles") return profiles;
           if (cmd === "get_status") return status;
           if (cmd === "get_logs") return logs;
+          if (cmd === "list_rules") return rules;
+          if (cmd === "save_rules") return args.rules;
+          if (cmd === "get_history") return history;
+          if (cmd === "clear_history") return null;
           if (cmd === "get_settings")
             return {
               autoReconnect: true, connectOnLaunch: false, minimiseToTray: true,
@@ -256,7 +276,7 @@ async function session({ theme, language = "en", wallpaper = null, dim = 55, blu
         for (const id of listeners["status"] ?? []) callbacks[id]?.({ event: "status", id, payload });
       };
     },
-    { profiles: PROFILES, status: STATUS, logs: LOGS, theme, language, wallpaper, dim, blur },
+    { profiles: PROFILES, status: STATUS, logs: LOGS, rules: RULES, history: HISTORY, theme, language, wallpaper, dim, blur },
   );
   page.on("pageerror", (e) => console.error("[pageerror]", e.message));
   await page.goto(URL_BASE);
@@ -297,6 +317,8 @@ const shot = (page, name) => page.screenshot({ path: path.join(out, `${name}.png
   await shot(page, "screenshot-traffic");
   await tab(page, "Connection");
   await shot(page, "screenshot-connection");
+  await tab(page, "Rules");
+  await shot(page, "screenshot-rules");
   await tab(page, "Servers");
   await shot(page, "screenshot-servers");
   await page.click("text=Edit");

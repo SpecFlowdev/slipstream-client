@@ -10,6 +10,8 @@ use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
 
+use crate::rules::Rule;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Profile {
@@ -221,7 +223,32 @@ struct StoreFile {
     settings: Settings,
     #[serde(default)]
     last_profile: Option<String>,
+    /// Routing rules, in the order they are matched.
+    #[serde(default)]
+    rules: Vec<Rule>,
+    /// Completed sessions, newest last, capped at HISTORY_CAPACITY.
+    #[serde(default)]
+    history: Vec<SessionRecord>,
 }
+
+/// What one finished session moved. Kept so the interface can show more than
+/// the session currently running.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionRecord {
+    /// Milliseconds since the Unix epoch, when the session ended.
+    pub ended_ms: u64,
+    pub profile_name: String,
+    pub seconds: u64,
+    pub bytes_up: u64,
+    pub bytes_down: u64,
+    pub peak_rate_down: u64,
+    pub connections: u64,
+}
+
+/// Enough to show a useful history without the config file growing without
+/// bound; the oldest entries fall off the front.
+const HISTORY_CAPACITY: usize = 100;
 
 pub struct Store {
     path: PathBuf,
@@ -300,6 +327,46 @@ impl Store {
         guard.settings = settings.clone();
         self.persist(&guard)?;
         Ok(settings)
+    }
+
+    pub fn rules(&self) -> Vec<Rule> {
+        self.inner.lock().unwrap().rules.clone()
+    }
+
+    pub fn save_rules(&self, rules: Vec<Rule>) -> Result<Vec<Rule>, String> {
+        for rule in &rules {
+            rule.validate()?;
+        }
+        let mut guard = self.inner.lock().unwrap();
+        guard.rules = rules.clone();
+        self.persist(&guard)?;
+        Ok(rules)
+    }
+
+    pub fn history(&self) -> Vec<SessionRecord> {
+        self.inner.lock().unwrap().history.clone()
+    }
+
+    pub fn clear_history(&self) -> Result<(), String> {
+        let mut guard = self.inner.lock().unwrap();
+        guard.history.clear();
+        self.persist(&guard)
+    }
+
+    /// Appends a finished session. Sessions that carried nothing at all are
+    /// dropped: a connect that failed immediately is noise in a history meant
+    /// to show what was actually moved.
+    pub fn record_session(&self, record: SessionRecord) {
+        if record.bytes_up == 0 && record.bytes_down == 0 {
+            return;
+        }
+        let mut guard = self.inner.lock().unwrap();
+        guard.history.push(record);
+        let overflow = guard.history.len().saturating_sub(HISTORY_CAPACITY);
+        if overflow > 0 {
+            guard.history.drain(0..overflow);
+        }
+        let _ = self.persist(&guard);
     }
 
     pub fn last_profile(&self) -> Option<String> {
