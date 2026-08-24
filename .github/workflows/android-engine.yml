@@ -1,15 +1,9 @@
 name: Android engine
 
-# Proves the one thing an Android client depends on and nothing else can be
-# decided without: whether the tunnel engine cross-compiles for Android.
+# Cross-compiles the tunnel for Android and uploads what comes out.
 #
-# slipstream-rust is Rust around a vendored picoquic (C) plus OpenSSL, built
-# through the `cc` crate rather than CMake, and it carries a build/android.rs
-# of its own — so this should work. "Should" is not evidence, hence this
-# workflow: it builds the real thing with the real NDK and uploads whatever
-# comes out.
-#
-# Run it from the Actions tab. It touches nothing in the repository.
+# The recipe itself lives in scripts/build-android-engine.sh so the APK
+# workflow builds the engine exactly the same way this does.
 
 on:
   workflow_dispatch:
@@ -18,8 +12,8 @@ on:
         description: Upstream slipstream-rust ref to build
         default: v0.1.1
       abis:
-        description: Comma-separated Android targets
-        default: aarch64-linux-android,armv7-linux-androideabi
+        description: Space-separated Rust target triples
+        default: aarch64-linux-android armv7-linux-androideabi
 
 permissions:
   contents: read
@@ -44,171 +38,16 @@ jobs:
 
       - name: Add the Android targets
         run: |
-          IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
-          for target in "${TARGETS[@]}"; do
+          for target in ${{ inputs.abis }}; do
             rustup target add "${target}"
           done
-
-      # The image ships its own NDK. An action that downloads another one was
-      # tried first and left a broken `clang` symlink behind, so the build died
-      # on "No such file or directory" for a compiler that was right there.
-      - name: Find the NDK
-        id: ndk
-        run: |
-          set -euo pipefail
-          NDK="${ANDROID_NDK_LATEST_HOME:-}"
-          if [[ -z "${NDK}" || ! -d "${NDK}" ]]; then
-            NDK="$(ls -d "${ANDROID_SDK_ROOT}"/ndk/* 2>/dev/null | sort -V | tail -1)"
-          fi
-          [[ -n "${NDK}" && -d "${NDK}" ]] || { echo "::error::no NDK on this image"; exit 1; }
-          echo "Using ${NDK}"
-          "${NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version
-          echo "path=${NDK}" >> "${GITHUB_OUTPUT}"
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: upstream
 
       - name: Build
-        env:
-          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.path }}
-        working-directory: upstream
-        run: |
-          set -euo pipefail
-          TOOLCHAIN="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          echo "Toolchain: ${TOOLCHAIN}"
-
-          # API 24 is the floor for the socket calls picoquic uses, and is old
-          # enough to cover any device likely to run this.
-          API=24
-
-          # OpenSSL's build system still calls the binutils by their old
-          # triple-prefixed names (`aarch64-linux-android-ranlib` and friends).
-          # NDK r23 dropped those wrappers and ships one llvm-* copy of each, so
-          # the names have to be put back or `make install_dev` dies with a bare
-          # "not found". A directory of symlinks ahead of PATH is the whole fix.
-          SHIM="${RUNNER_TEMP}/ndk-shim"
-          mkdir -p "${SHIM}"
-          for triple in aarch64-linux-android armv7a-linux-androideabi \
-                        arm-linux-androideabi x86_64-linux-android i686-linux-android; do
-            for tool in ar ranlib nm strip objcopy objdump readelf; do
-              ln -sf "${TOOLCHAIN}/llvm-${tool}" "${SHIM}/${triple}-${tool}"
-            done
-          done
-          export PATH="${SHIM}:${TOOLCHAIN}:${PATH}"
-          # openssl's Configure looks for the NDK under this name specifically.
-          export ANDROID_NDK_ROOT="${ANDROID_NDK_HOME}"
-
-          IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
-          for target in "${TARGETS[@]}"; do
-            # picoquic is built by CMake through the NDK's own toolchain file,
-            # which wants Android's ABI names rather than Rust's target triples.
-            case "${target}" in
-              aarch64-linux-android)     CLANG_PREFIX=aarch64-linux-android;   ABI=arm64-v8a ;;
-              armv7-linux-androideabi)   CLANG_PREFIX=armv7a-linux-androideabi; ABI=armeabi-v7a ;;
-              x86_64-linux-android)      CLANG_PREFIX=x86_64-linux-android;    ABI=x86_64 ;;
-              i686-linux-android)        CLANG_PREFIX=i686-linux-android;      ABI=x86 ;;
-              *) echo "Unknown target ${target}"; exit 1 ;;
-            esac
-            export ANDROID_ABI="${ABI}"
-            export ANDROID_PLATFORM="android-${API}"
-            # One build directory per ABI. The default is shared, so the second
-            # target would otherwise link the first one's objects.
-            export PICOQUIC_BUILD_DIR="${PWD}/.picoquic-build/${target}"
-
-            UPPER="$(echo "${target}" | tr 'a-z-' 'A-Z_')"
-            SUFFIX="${target//-/_}"
-            export CC_${SUFFIX}="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
-            export CXX_${SUFFIX}="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang++"
-            export AR_${SUFFIX}="${TOOLCHAIN}/llvm-ar"
-            export RANLIB_${SUFFIX}="${TOOLCHAIN}/llvm-ranlib"
-            export CARGO_TARGET_${UPPER}_LINKER="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
-
-            # OpenSSL has to exist before picoquic is configured, and it has
-            # to be named outright. CMake's FindOpenSSL locates the headers
-            # from OPENSSL_ROOT_DIR but then looks for the library with
-            # find_library, which the NDK's toolchain file confines to the
-            # sysroot — so a vendored libcrypto.a sitting in cargo's target
-            # directory is invisible to it, and configuring stops at
-            # "missing: OPENSSL_CRYPTO_LIBRARY".
-            # OpenSSL has to be built before picoquic is configured, and its
-            # library has to be named outright: CMake's FindOpenSSL locates the
-            # headers from OPENSSL_ROOT_DIR but finds the library with
-            # find_library, which the NDK toolchain file confines to the
-            # sysroot. A vendored libcrypto.a in cargo's target directory is
-            # invisible to that, and configuring stops at
-            # "missing: OPENSSL_CRYPTO_LIBRARY".
-            #
-            # The way to get it built with exactly the feature set the real
-            # build will use is to start the real build with picoquic's
-            # auto-build switched off: cargo builds openssl-sys first, then
-            # stops at slipstream-ffi. That failure is expected.
-            echo "::group::${target} openssl"
-            PICOQUIC_AUTO_BUILD=0 cargo build --release \
-              --target "${target}" \
-              -p slipstream-client \
-              --features slipstream-ffi/openssl-vendored,slipstream-ffi/picoquic-minimal-build \
-              2>&1 | tail -5 || true
-            echo "::endgroup::"
-
-            SSL_LIB="$(ls -d target/"${target}"/release/build/openssl-sys-*/out/openssl-build/install/lib 2>/dev/null | head -1 || true)"
-            {
-              echo "target        ${target}"
-              echo "openssl lib   ${SSL_LIB:-<none found>}"
-              ls -d target/"${target}"/release/build/openssl-sys-*/out 2>/dev/null || echo "  no openssl-sys out dirs"
-            } >> "${RUNNER_TEMP}/summary.txt"
-
-            if [[ -n "${SSL_LIB}" && -f "${SSL_LIB}/libcrypto.a" ]]; then
-              export OPENSSL_CRYPTO_LIBRARY="${SSL_LIB}/libcrypto.a"
-              export OPENSSL_SSL_LIBRARY="${SSL_LIB}/libssl.a"
-              echo "OpenSSL for ${target}: ${SSL_LIB}"
-            else
-              echo "::warning::no vendored OpenSSL found for ${target}; letting CMake search"
-            fi
-
-            echo "::group::${target}"
-            # openssl-vendored builds OpenSSL from source for the target, so
-            # the host's copy is not dragged in. The output is kept because a
-            # build-script failure prints its reason hundreds of lines before
-            # the end, where a log tail never reaches it.
-            if ! cargo build --release \
-              --target "${target}" \
-              -p slipstream-client \
-              --features slipstream-ffi/openssl-vendored,slipstream-ffi/picoquic-minimal-build \
-              2>&1 | tee "${RUNNER_TEMP}/${target}.log"; then
-              echo "::endgroup::"
-              echo "----- why ${target} failed -----"
-              grep -n -i -m 40 -E 'error|Could NOT find|CMake Error' "${RUNNER_TEMP}/${target}.log" || true
-              echo "::error::${target} failed"
-              exit 1
-            fi
-            echo "::endgroup::"
-
-            file "target/${target}/release/slipstream-client"
-          done
-
-      - name: Why it failed
-        if: failure()
-        run: |
-          echo "===== what the build found ====="
-          cat "${RUNNER_TEMP}/summary.txt" 2>/dev/null || echo "(nothing recorded)"
-          for log in "${RUNNER_TEMP}"/*.log; do
-            [[ -f "${log}" ]] || continue
-            echo
-            echo "===== $(basename "${log}") ====="
-            grep -i -E 'error|Could NOT find|CMake Error|warning: unused' "${log}" | tail -25 || true
-          done
-
-      - name: Collect
-        working-directory: upstream
-        run: |
-          mkdir -p ../out
-          IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
-          for target in "${TARGETS[@]}"; do
-            cp "target/${target}/release/slipstream-client" \
-               "../out/slipstream-client-${target}" 2>/dev/null || true
-          done
-          ls -la ../out
+        run: ./scripts/build-android-engine.sh upstream "${PWD}/out" ${{ inputs.abis }}
 
       - uses: actions/upload-artifact@v4
         with:
