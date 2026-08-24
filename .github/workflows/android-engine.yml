@@ -126,12 +126,20 @@ jobs:
 
             echo "::group::${target}"
             # openssl-vendored builds OpenSSL from source for the target, so
-            # the host's copy is not dragged in.
-            cargo build --release \
+            # the host's copy is not dragged in. The output is kept because a
+            # build-script failure prints its reason hundreds of lines before
+            # the end, where a log tail never reaches it.
+            if ! cargo build --release \
               --target "${target}" \
               -p slipstream-client \
-              --features slipstream-ffi/openssl-vendored,slipstream-ffi/picoquic-minimal-build || {
-                echo "::error::${target} failed"; exit 1; }
+              --features slipstream-ffi/openssl-vendored,slipstream-ffi/picoquic-minimal-build \
+              2>&1 | tee "${RUNNER_TEMP}/${target}.log"; then
+              echo "::endgroup::"
+              echo "----- why ${target} failed -----"
+              grep -n -i -m 40 -E 'error|Could NOT find|CMake Error' "${RUNNER_TEMP}/${target}.log" || true
+              echo "::error::${target} failed"
+              exit 1
+            fi
             echo "::endgroup::"
 
             file "target/${target}/release/slipstream-client"
