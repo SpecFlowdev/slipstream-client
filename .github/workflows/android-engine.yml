@@ -131,8 +131,15 @@ jobs:
             # sysroot — so a vendored libcrypto.a sitting in cargo's target
             # directory is invisible to it, and configuring stops at
             # "missing: OPENSSL_CRYPTO_LIBRARY".
+            # From a workspace root a feature has to name its package, and
+            # this step is allowed to fail: without it CMake simply searches
+            # for OpenSSL itself, which is the behaviour before this existed.
             echo "::group::${target} openssl"
-            cargo build --release --target "${target}" -p openssl-sys --features vendored
+            if ! cargo build --release --target "${target}" \
+                 -p openssl-sys --features openssl-sys/vendored \
+                 2>&1 | tail -30; then
+              echo "::warning::prebuilding openssl-sys for ${target} did not work"
+            fi
             echo "::endgroup::"
 
             SSL_LIB="$(ls -d target/"${target}"/release/build/openssl-sys-*/out/openssl-build/install/lib 2>/dev/null | head -1)"
