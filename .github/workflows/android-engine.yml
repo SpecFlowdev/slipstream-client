@@ -131,21 +131,33 @@ jobs:
             # sysroot — so a vendored libcrypto.a sitting in cargo's target
             # directory is invisible to it, and configuring stops at
             # "missing: OPENSSL_CRYPTO_LIBRARY".
-            # From a workspace root a feature has to name its package, and
-            # this step is allowed to fail: without it CMake simply searches
-            # for OpenSSL itself, which is the behaviour before this existed.
+            # OpenSSL has to be built before picoquic is configured, and its
+            # library has to be named outright: CMake's FindOpenSSL locates the
+            # headers from OPENSSL_ROOT_DIR but finds the library with
+            # find_library, which the NDK toolchain file confines to the
+            # sysroot. A vendored libcrypto.a in cargo's target directory is
+            # invisible to that, and configuring stops at
+            # "missing: OPENSSL_CRYPTO_LIBRARY".
+            #
+            # The way to get it built with exactly the feature set the real
+            # build will use is to start the real build with picoquic's
+            # auto-build switched off: cargo builds openssl-sys first, then
+            # stops at slipstream-ffi. That failure is expected.
             echo "::group::${target} openssl"
-            if ! cargo build --release --target "${target}" \
-                 -p openssl-sys --features openssl-sys/vendored \
-                 2>&1 | tail -30; then
-              echo "::warning::prebuilding openssl-sys for ${target} did not work"
-            fi
+            PICOQUIC_AUTO_BUILD=0 cargo build --release \
+              --target "${target}" \
+              -p slipstream-client \
+              --features slipstream-ffi/openssl-vendored,slipstream-ffi/picoquic-minimal-build \
+              2>&1 | tail -5 || true
             echo "::endgroup::"
 
-            # `|| true` matters: a command substitution that fails is enough
-            # for `set -e` to end the step, so a missing directory here would
-            # abort the job rather than fall through to the warning below.
             SSL_LIB="$(ls -d target/"${target}"/release/build/openssl-sys-*/out/openssl-build/install/lib 2>/dev/null | head -1 || true)"
+            {
+              echo "target        ${target}"
+              echo "openssl lib   ${SSL_LIB:-<none found>}"
+              ls -d target/"${target}"/release/build/openssl-sys-*/out 2>/dev/null || echo "  no openssl-sys out dirs"
+            } >> "${RUNNER_TEMP}/summary.txt"
+
             if [[ -n "${SSL_LIB}" && -f "${SSL_LIB}/libcrypto.a" ]]; then
               export OPENSSL_CRYPTO_LIBRARY="${SSL_LIB}/libcrypto.a"
               export OPENSSL_SSL_LIBRARY="${SSL_LIB}/libssl.a"
@@ -173,6 +185,18 @@ jobs:
             echo "::endgroup::"
 
             file "target/${target}/release/slipstream-client"
+          done
+
+      - name: Why it failed
+        if: failure()
+        run: |
+          echo "===== what the build found ====="
+          cat "${RUNNER_TEMP}/summary.txt" 2>/dev/null || echo "(nothing recorded)"
+          for log in "${RUNNER_TEMP}"/*.log; do
+            [[ -f "${log}" ]] || continue
+            echo
+            echo "===== $(basename "${log}") ====="
+            grep -i -E 'error|Could NOT find|CMake Error|warning: unused' "${log}" | tail -25 || true
           done
 
       - name: Collect
