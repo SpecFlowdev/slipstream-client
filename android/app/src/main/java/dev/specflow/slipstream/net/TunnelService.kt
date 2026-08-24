@@ -277,7 +277,7 @@ class TunnelService : VpnService() {
         teardownBlocking()
         state.value = Status(phase = Phase.OFF, message = reason)
         Notifications.clear(this)
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopForeground(true)
         stopSelf()
     }
 
@@ -346,7 +346,11 @@ class TunnelService : VpnService() {
 
         fun start(context: Context) {
             val intent = Intent(context, TunnelService::class.java)
-            context.startForegroundService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
         }
 
         fun stop(context: Context) {

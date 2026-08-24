@@ -35,7 +35,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -144,7 +143,6 @@ private fun Wallpaper(path: String, dim: Int, blur: Int) {
         modifier = Modifier
             .fillMaxSize()
             .then(if (blur > 0) Modifier.blur(blur.dp) else Modifier)
-            .graphicsLayer { alpha = 1f }
     )
     // The veil is what keeps text readable over an arbitrary photograph; it
     // takes the palette's own background colour so each theme dims towards

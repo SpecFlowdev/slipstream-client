@@ -1,6 +1,5 @@
 package dev.specflow.slipstream.net
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import dev.specflow.slipstream.MainActivity
 import dev.specflow.slipstream.R
@@ -69,20 +69,18 @@ object Notifications {
             else -> status.message.ifBlank { " " }
         }
 
-        val builder = Notification.Builder(service, CHANNEL)
+        // The compat builder, because the platform one only takes a channel
+        // from API 26 and this app runs from 24.
+        val notification = NotificationCompat.Builder(service, CHANNEL)
             .setSmallIcon(R.drawable.ic_tile)
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(open)
             .setOngoing(status.phase == TunnelService.Phase.ON)
             .setOnlyAlertOnce(true)
-            .addAction(
-                Notification.Action.Builder(
-                    null, service.getString(R.string.disconnect), stop
-                ).build()
-            )
-
-        val notification = builder.build()
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(0, service.getString(R.string.disconnect), stop)
+            .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             service.startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {

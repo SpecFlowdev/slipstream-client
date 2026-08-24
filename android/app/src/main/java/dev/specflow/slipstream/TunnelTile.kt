@@ -1,7 +1,9 @@
 package dev.specflow.slipstream
 
+import android.app.PendingIntent
 import android.content.Intent
 import android.net.VpnService
+import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import dev.specflow.slipstream.net.TunnelService
@@ -25,14 +27,18 @@ class TunnelTile : TileService() {
         if (on) {
             TunnelService.stop(this)
         } else if (VpnService.prepare(this) != null) {
-            startActivityAndCollapse(
-                android.app.PendingIntent.getActivity(
-                    this, 0,
-                    Intent(this, MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    android.app.PendingIntent.FLAG_IMMUTABLE
+            // Consent can only be asked for by an activity, so the tile hands
+            // over to the app rather than failing quietly.
+            val open = Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startActivityAndCollapse(
+                    PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE)
                 )
-            )
+            } else {
+                @Suppress("DEPRECATION")
+                startActivityAndCollapse(open)
+            }
         } else {
             TunnelService.start(this)
         }

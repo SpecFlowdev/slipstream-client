@@ -1,9 +1,7 @@
 package dev.specflow.slipstream.net
 
 import java.io.DataInputStream
-import java.io.EOFException
 import java.io.IOException
-import java.io.InputStream
 import java.io.OutputStream
 
 /**
@@ -14,24 +12,24 @@ import java.io.OutputStream
  * to the proxy sitting at the far end of the tunnel.
  */
 object Socks5 {
-    const val VERSION = 0x05.toByte()
+    val VERSION = 0x05.toByte()
 
-    const val NO_AUTH = 0x00.toByte()
-    const val NO_ACCEPTABLE = 0xFF.toByte()
+    val NO_AUTH = 0x00.toByte()
+    val NO_ACCEPTABLE = 0xFF.toByte()
 
-    const val CMD_CONNECT = 0x01.toByte()
-    const val CMD_BIND = 0x02.toByte()
-    const val CMD_UDP_ASSOCIATE = 0x03.toByte()
+    val CMD_CONNECT = 0x01.toByte()
+    val CMD_BIND = 0x02.toByte()
+    val CMD_UDP_ASSOCIATE = 0x03.toByte()
 
-    const val ATYP_IPV4 = 0x01.toByte()
-    const val ATYP_HOST = 0x03.toByte()
-    const val ATYP_IPV6 = 0x04.toByte()
+    val ATYP_IPV4 = 0x01.toByte()
+    val ATYP_HOST = 0x03.toByte()
+    val ATYP_IPV6 = 0x04.toByte()
 
-    const val REP_OK = 0x00.toByte()
-    const val REP_FAILURE = 0x01.toByte()
-    const val REP_NOT_ALLOWED = 0x02.toByte()
-    const val REP_HOST_UNREACHABLE = 0x04.toByte()
-    const val REP_CMD_UNSUPPORTED = 0x07.toByte()
+    val REP_OK = 0x00.toByte()
+    val REP_FAILURE = 0x01.toByte()
+    val REP_NOT_ALLOWED = 0x02.toByte()
+    val REP_HOST_UNREACHABLE = 0x04.toByte()
+    val REP_CMD_UNSUPPORTED = 0x07.toByte()
 
     data class Address(val host: String, val port: Int) {
         override fun toString() = if (host.contains(':')) "[$host]:$port" else "$host:$port"
@@ -143,15 +141,5 @@ object Socks5 {
             out[i * 2 + 1] = n.toByte()
         }
         return out
-    }
-
-    @Throws(IOException::class)
-    fun InputStream.readFullyOrThrow(buf: ByteArray) {
-        var off = 0
-        while (off < buf.size) {
-            val n = read(buf, off, buf.size - off)
-            if (n < 0) throw EOFException()
-            off += n
-        }
     }
 }
