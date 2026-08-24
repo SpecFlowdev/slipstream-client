@@ -69,11 +69,27 @@ jobs:
           set -euo pipefail
           TOOLCHAIN="${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin"
           echo "Toolchain: ${TOOLCHAIN}"
-          ls "${TOOLCHAIN}" | head -20
 
           # API 24 is the floor for the socket calls picoquic uses, and is old
           # enough to cover any device likely to run this.
           API=24
+
+          # OpenSSL's build system still calls the binutils by their old
+          # triple-prefixed names (`aarch64-linux-android-ranlib` and friends).
+          # NDK r23 dropped those wrappers and ships one llvm-* copy of each, so
+          # the names have to be put back or `make install_dev` dies with a bare
+          # "not found". A directory of symlinks ahead of PATH is the whole fix.
+          SHIM="${RUNNER_TEMP}/ndk-shim"
+          mkdir -p "${SHIM}"
+          for triple in aarch64-linux-android armv7a-linux-androideabi \
+                        arm-linux-androideabi x86_64-linux-android i686-linux-android; do
+            for tool in ar ranlib nm strip objcopy objdump readelf; do
+              ln -sf "${TOOLCHAIN}/llvm-${tool}" "${SHIM}/${triple}-${tool}"
+            done
+          done
+          export PATH="${SHIM}:${TOOLCHAIN}:${PATH}"
+          # openssl's Configure looks for the NDK under this name specifically.
+          export ANDROID_NDK_ROOT="${ANDROID_NDK_HOME}"
 
           IFS=',' read -ra TARGETS <<< "${{ inputs.abis }}"
           for target in "${TARGETS[@]}"; do
@@ -86,8 +102,11 @@ jobs:
             esac
 
             UPPER="$(echo "${target}" | tr 'a-z-' 'A-Z_')"
-            export CC_${target//-/_}="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
-            export AR_${target//-/_}="${TOOLCHAIN}/llvm-ar"
+            SUFFIX="${target//-/_}"
+            export CC_${SUFFIX}="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
+            export CXX_${SUFFIX}="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang++"
+            export AR_${SUFFIX}="${TOOLCHAIN}/llvm-ar"
+            export RANLIB_${SUFFIX}="${TOOLCHAIN}/llvm-ranlib"
             export CARGO_TARGET_${UPPER}_LINKER="${TOOLCHAIN}/${CLANG_PREFIX}${API}-clang"
 
             echo "::group::${target}"
@@ -100,7 +119,7 @@ jobs:
                 echo "::error::${target} failed"; exit 1; }
             echo "::endgroup::"
 
-            file "target/${target}/release/slipstream-client" || true
+            file "target/${target}/release/slipstream-client"
           done
 
       - name: Collect
