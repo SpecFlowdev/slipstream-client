@@ -101,12 +101,13 @@ Actions:
 
 Keep `slipstream.jks` somewhere safe and out of the repository.
 
-Without those secrets the workflow still runs and produces a **debug-signed**
-release APK, named `-debugsigned` so it cannot be mistaken for one. It is
-minified exactly like the real thing, which makes it the right build for
-finding what R8 broke — and the wrong one to give anybody, since the debug key
-is public and an APK carrying it can never be upgraded to a properly signed
-one. Publishing to a release is refused for that build.
+Without those secrets the workflow still runs and publishes a **debug-signed**
+release APK, named `-debugsigned` so nobody has to guess. It is minified
+exactly like the real thing and installs and runs normally. What it cannot do
+is be upgraded: with no key of our own the build tools invent a fresh one every
+run, so the next build is a different signer and Android refuses to install it
+over this one — it has to be uninstalled first, which clears saved servers.
+The release notes say so beside the download.
 
 R8 is the reason release builds need testing of their own: the packet bridge
 finds its class and methods **by name, from C**. Nothing in the Kotlin calls

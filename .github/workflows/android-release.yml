@@ -37,7 +37,7 @@ on:
       publish:
         description: Attach the APK to the GitHub release for this version
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -190,10 +190,25 @@ jobs:
         run: |
           set -euo pipefail
           TAG="v${{ inputs.version }}"
+
+          # A debug-signed APK is published rather than withheld — it installs
+          # and runs, and holding it back helps nobody. What it cannot do is be
+          # upgraded: without a key of our own the build tools invent a fresh
+          # one every run, so the next build is a different signer and Android
+          # refuses to install it over this one. Say so beside the download
+          # rather than letting someone find out.
+          NOTE=""
           if [[ -z "${{ steps.key.outputs.path }}" ]]; then
-            echo "::error::refusing to publish a debug-signed APK"
-            exit 1
+            NOTE=$'\n\n**Android:** this APK is not signed with a stable key yet. It installs and runs, but a later build will not install over it — uninstall first, which clears saved servers. Signing is coming.'
           fi
+
           gh release view "${TAG}" >/dev/null 2>&1 \
             || gh release create "${TAG}" --title "Slipstream ${{ inputs.version }}" --notes ""
+          if [[ -n "${NOTE}" ]]; then
+            BODY="$(gh release view "${TAG}" --json body --jq .body)"
+            case "${BODY}" in
+              *"not signed with a stable key"*) ;;
+              *) gh release edit "${TAG}" --notes "${BODY}${NOTE}" ;;
+            esac
+          fi
           gh release upload "${TAG}" out/* --clobber
