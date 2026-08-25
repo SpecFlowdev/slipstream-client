@@ -46,6 +46,10 @@ Grab the latest build from [Releases](https://github.com/SpecFlowdev/slipstream-
 | Fedora, RHEL, openSUSE | `…-linux-x86_64.rpm` |
 | Any Linux, no install | `…-linux-x86_64.tar.gz` or `…AppImage` |
 
+There is an **[Android client](android/)** as well, with the same servers, the
+same rules and the same numbers. It is built by the `Android APK` workflow
+rather than published to Releases so far.
+
 Every file ships with a `.sha256` next to it:
 
 ```sh
@@ -235,7 +239,7 @@ The tray still works normally on Windows, where "close to tray" appears in Setti
 ## Roadmap
 
 - A userspace network stack in front of a TUN device, for capture that does not depend on applications honouring the proxy setting
-- Android build — the tunnel needs cross-compiling against the NDK first, as upstream ships no Android binary
+- Android releases published alongside the desktop ones, signed rather than debug-built
 - Profile import and export by link or QR
 - Per-destination history kept across sessions, opt-in
 
