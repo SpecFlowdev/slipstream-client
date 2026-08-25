@@ -1,9 +1,19 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
 }
+
+// A release build is signed with a real key when one is supplied, and with the
+// debug key when one is not. The second case still produces a minified,
+// installable APK — useful for testing what R8 did — but it is not a build to
+// hand to anyone: the debug key is not secret, and an APK signed with it can
+// never be upgraded to one signed properly.
+val keystorePath: String? = System.getenv("SLIPSTREAM_KEYSTORE")
+    ?.takeIf { it.isNotBlank() && File(it).exists() }
 
 android {
     namespace = "dev.specflow.slipstream"
@@ -13,8 +23,25 @@ android {
         applicationId = "dev.specflow.slipstream"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // A release build takes its version from the tag being built, so the
+        // number in the APK matches the one people downloaded it under.
+        versionCode = (System.getenv("SLIPSTREAM_VERSION_CODE") ?: "1").toInt()
+        versionName = System.getenv("SLIPSTREAM_VERSION_NAME") ?: "0.1.0"
+    }
+
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = File(keystorePath)
+                storePassword = System.getenv("SLIPSTREAM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SLIPSTREAM_KEY_ALIAS") ?: "slipstream"
+                keyPassword = System.getenv("SLIPSTREAM_KEY_PASSWORD")
+                    ?: System.getenv("SLIPSTREAM_KEYSTORE_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
     }
 
     buildTypes {
@@ -22,8 +49,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Unsigned unless a keystore is supplied; the workflow signs it.
             signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
         debug {
             isMinifyEnabled = false

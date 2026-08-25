@@ -1,0 +1,199 @@
+name: Android release
+
+# Builds a release APK: minified, versioned, and signed.
+#
+# Signing needs a key, and a key cannot be invented per build — an APK signed
+# with a different key each time can never be upgraded, only uninstalled and
+# reinstalled. So the key comes from repository secrets. Without them the
+# build still runs and produces a debug-signed APK, clearly labelled, because
+# a minified build that nobody can test is worth less than one that says what
+# it is.
+#
+# To sign properly, add these repository secrets:
+#   ANDROID_KEYSTORE_BASE64    base64 of your .jks
+#   ANDROID_KEYSTORE_PASSWORD  its password
+#   ANDROID_KEY_ALIAS          the alias inside it (default: slipstream)
+#   ANDROID_KEY_PASSWORD       the alias password, if different
+# See android/README.md for how to make one.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version name for the APK, e.g. 0.2.0
+        required: true
+      version_code:
+        description: Version code, an integer that must only ever increase
+        default: '1'
+      upstream_ref:
+        description: slipstream-rust ref for the tunnel
+        default: v0.1.1
+      bridge_ref:
+        description: hev-socks5-tunnel ref for the packet bridge
+        default: 2.9.0
+      abis:
+        description: Space-separated Rust target triples
+        default: aarch64-linux-android armv7-linux-androideabi
+      publish:
+        description: Attach the APK to the GitHub release for this version
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  BRIDGE_PACKAGE: dev/specflow/slipstream/net
+  BRIDGE_CLASS: Bridge
+
+jobs:
+  build:
+    name: Build a release APK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out slipstream-rust
+        uses: actions/checkout@v5
+        with:
+          repository: Mygod/slipstream-rust
+          ref: ${{ inputs.upstream_ref }}
+          path: upstream
+          submodules: recursive
+
+      - name: Check out the packet bridge
+        uses: actions/checkout@v5
+        with:
+          repository: heiher/hev-socks5-tunnel
+          ref: ${{ inputs.bridge_ref }}
+          path: bridge
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Add the Android targets
+        run: |
+          for target in ${{ inputs.abis }}; do
+            rustup target add "${target}"
+          done
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: upstream
+
+      - name: Build the tunnel
+        run: |
+          ./scripts/build-android-engine.sh upstream \
+            "${PWD}/android/app/src/main/jniLibs" ${{ inputs.abis }}
+
+      - name: Build the packet bridge
+        run: |
+          set -euo pipefail
+          NDK="${ANDROID_NDK_LATEST_HOME:-}"
+          if [[ -z "${NDK}" || ! -d "${NDK}" ]]; then
+            NDK="$(ls -d "${ANDROID_SDK_ROOT}"/ndk/* | sort -V | tail -1)"
+          fi
+
+          ABIS=""
+          for target in ${{ inputs.abis }}; do
+            case "${target}" in
+              aarch64-linux-android)   ABIS="${ABIS} arm64-v8a" ;;
+              armv7-linux-androideabi) ABIS="${ABIS} armeabi-v7a" ;;
+              x86_64-linux-android)    ABIS="${ABIS} x86_64" ;;
+              i686-linux-android)      ABIS="${ABIS} x86" ;;
+            esac
+          done
+
+          cd bridge
+          "${NDK}/ndk-build" \
+            NDK_PROJECT_PATH=. \
+            APP_BUILD_SCRIPT=./Android.mk \
+            NDK_APPLICATION_MK=./Application.mk \
+            APP_ABI="${ABIS# }" \
+            APP_PLATFORM=android-24 \
+            APP_CFLAGS="-O3 -DPKGNAME=${BRIDGE_PACKAGE} -DCLSNAME=${BRIDGE_CLASS}"
+
+          for abi in ${ABIS}; do
+            mkdir -p "../android/app/src/main/jniLibs/${abi}"
+            cp "libs/${abi}/libhev-socks5-tunnel.so" \
+               "../android/app/src/main/jniLibs/${abi}/"
+          done
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Unpack the signing key
+        id: key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [[ -n "${KEYSTORE}" ]]; then
+            echo "${KEYSTORE}" | base64 -d > "${RUNNER_TEMP}/signing.jks"
+            echo "path=${RUNNER_TEMP}/signing.jks" >> "${GITHUB_OUTPUT}"
+            echo "Signing with the supplied key."
+          else
+            echo "::warning::No signing key; the APK will carry the debug key and cannot be upgraded later."
+            echo "path=" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Test
+        working-directory: android
+        run: gradle --no-daemon :app:testReleaseUnitTest
+
+      - name: Build
+        working-directory: android
+        env:
+          SLIPSTREAM_KEYSTORE: ${{ steps.key.outputs.path }}
+          SLIPSTREAM_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          SLIPSTREAM_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          SLIPSTREAM_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SLIPSTREAM_VERSION_NAME: ${{ inputs.version }}
+          SLIPSTREAM_VERSION_CODE: ${{ inputs.version_code }}
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Name it, and say what signed it
+        id: apk
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$(ls -d "${ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -1)"
+          SRC="$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)"
+          [[ -n "${SRC}" ]] || { echo "::error::no APK was produced"; exit 1; }
+
+          SUFFIX=""
+          if [[ -z "${{ steps.key.outputs.path }}" ]]; then SUFFIX="-debugsigned"; fi
+          NAME="slipstream-${{ inputs.version }}-android${SUFFIX}.apk"
+
+          mkdir -p out
+          cp "${SRC}" "out/${NAME}"
+          ( cd out && sha256sum "${NAME}" > "${NAME}.sha256" )
+
+          # Verifying is the only way to know the APK is actually installable
+          # and to see which certificate it carries.
+          "${BUILD_TOOLS}/apksigner" verify --print-certs --verbose "out/${NAME}"
+          echo "name=${NAME}" >> "${GITHUB_OUTPUT}"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: slipstream-android-release
+          path: out/
+          if-no-files-found: error
+
+      - name: Attach it to the release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ inputs.version }}"
+          if [[ -z "${{ steps.key.outputs.path }}" ]]; then
+            echo "::error::refusing to publish a debug-signed APK"
+            exit 1
+          fi
+          gh release view "${TAG}" >/dev/null 2>&1 \
+            || gh release create "${TAG}" --title "Slipstream ${{ inputs.version }}" --notes ""
+          gh release upload "${TAG}" out/* --clobber

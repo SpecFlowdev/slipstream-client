@@ -71,8 +71,51 @@ cd android
 go. Without them the app builds and runs, and says it has no tunnel for your
 device's processor rather than pretending otherwise.
 
+## Releasing
+
+`.github/workflows/android-release.yml` builds a minified, versioned, signed
+APK. Signing needs a key of your own, because a key invented per build makes
+an APK nobody can ever upgrade — only uninstall and reinstall, losing every
+profile with it.
+
+Make one once, and keep it. Losing it means no future build can update an
+installed copy:
+
+```sh
+keytool -genkeypair -v \
+  -keystore slipstream.jks -alias slipstream \
+  -keyalg RSA -keysize 4096 -validity 10000 \
+  -dname "CN=Slipstream, O=SpecFlowdev"
+base64 -w0 slipstream.jks     # paste this into the secret below
+```
+
+Then add four repository secrets under Settings → Secrets and variables →
+Actions:
+
+| Secret | What goes in it |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | the base64 printed above |
+| `ANDROID_KEYSTORE_PASSWORD` | the keystore password |
+| `ANDROID_KEY_ALIAS` | `slipstream` |
+| `ANDROID_KEY_PASSWORD` | the alias password, if it differs |
+
+Keep `slipstream.jks` somewhere safe and out of the repository.
+
+Without those secrets the workflow still runs and produces a **debug-signed**
+release APK, named `-debugsigned` so it cannot be mistaken for one. It is
+minified exactly like the real thing, which makes it the right build for
+finding what R8 broke — and the wrong one to give anybody, since the debug key
+is public and an APK carrying it can never be upgraded to a properly signed
+one. Publishing to a release is refused for that build.
+
+R8 is the reason release builds need testing of their own: the packet bridge
+finds its class and methods **by name, from C**. Nothing in the Kotlin calls
+them, so without a keep rule R8 removes them and the library loads and binds
+to nothing — a failure that cannot occur in a debug build.
+
 ## Status
 
-The APK is built and its unit tests run in CI. It has **not** been run on a
-physical device from here — there is no emulator or handset in the build
-environment — so treat the first install as the first real test.
+The debug APK and the release APK are both built in CI, and the unit tests
+run against both. Neither has been run on a physical device from here — there
+is no emulator or handset in the build environment — so treat the first
+install as the first real test.
