@@ -155,12 +155,18 @@ private fun Wallpaper(path: String, dim: Int, blur: Int) {
 }
 
 /** Shared by several screens, so the phase-to-words mapping stays in one place. */
-fun phaseLabel(status: TunnelService.Status): String = when {
-    status.phase == TunnelService.Phase.ON && status.waitingForNetwork -> "Waiting for a network"
-    status.phase == TunnelService.Phase.ON && status.reconnecting -> "Reconnecting"
-    status.phase == TunnelService.Phase.OFF -> "Not connected"
-    status.phase == TunnelService.Phase.STARTING -> "Connecting"
-    status.phase == TunnelService.Phase.ON -> "Connected"
-    status.phase == TunnelService.Phase.STOPPING -> "Disconnecting"
-    status.phase == TunnelService.Phase.FAILED -> "Failed"
+fun phaseLabel(status: TunnelService.Status): String = when (status.phase) {
+    // A subject-less `when` on booleans is never exhaustive to the compiler,
+    // so the phase stays the subject and the two ON sub-states nest inside it
+    // — which also means adding a Phase value here is a compile error until
+    // this is updated, rather than a label silently falling through.
+    TunnelService.Phase.OFF -> "Not connected"
+    TunnelService.Phase.STARTING -> "Connecting"
+    TunnelService.Phase.ON -> when {
+        status.waitingForNetwork -> "Waiting for a network"
+        status.reconnecting -> "Reconnecting"
+        else -> "Connected"
+    }
+    TunnelService.Phase.STOPPING -> "Disconnecting"
+    TunnelService.Phase.FAILED -> "Failed"
 }
