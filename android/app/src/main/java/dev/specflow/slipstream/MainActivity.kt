@@ -38,6 +38,9 @@ class MainActivity : ComponentActivity() {
 
     private var refused by mutableStateOf(false)
 
+    /** A `slipstream://p?...` link this activity was opened or re-opened with. */
+    private var pendingLink by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -47,6 +50,8 @@ class MainActivity : ComponentActivity() {
             notifications.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
 
+        pendingLink = linkFrom(intent)
+
         val store = Store.of(this)
         setContent {
             Shell(
@@ -54,8 +59,28 @@ class MainActivity : ComponentActivity() {
                 refusedConsent = refused,
                 onConnect = { connect() },
                 onDisconnect = { TunnelService.stop(this) },
+                pendingLink = pendingLink,
+                onPendingLinkConsumed = { pendingLink = null },
             )
         }
+    }
+
+    /**
+     * Reached instead of a fresh [onCreate] because the manifest declares
+     * `launchMode="singleTask"` — needed so the tunnel's own notification and
+     * the quick settings tile keep reopening the same activity instance
+     * rather than piling up new ones, which also means a second QR scan (or
+     * a second tap on a shared link) arrives here rather than starting over.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        linkFrom(intent)?.let { pendingLink = it }
+    }
+
+    private fun linkFrom(intent: Intent?): String? {
+        val uri = intent?.data?.takeIf { intent.action == Intent.ACTION_VIEW } ?: return null
+        return uri.toString().takeIf { it.startsWith("slipstream://p") }
     }
 
     private fun connect() {

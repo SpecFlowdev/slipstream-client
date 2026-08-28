@@ -97,6 +97,10 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.kotlinx.serialization.json)
+    // Encodes a Share QR bitmap; nothing here decodes one — scanning is left
+    // to whatever camera app is already on the device (see the deep link in
+    // the manifest), so there is no CameraX or Play Services dependency.
+    implementation(libs.zxing.core)
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation(libs.junit)

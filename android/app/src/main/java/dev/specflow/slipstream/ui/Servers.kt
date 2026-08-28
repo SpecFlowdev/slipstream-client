@@ -1,5 +1,7 @@
 package dev.specflow.slipstream.ui
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,15 +10,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
@@ -31,6 +37,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,10 +45,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.specflow.slipstream.core.Congestion
 import dev.specflow.slipstream.core.Profile
+import dev.specflow.slipstream.core.ProfileShare
 import dev.specflow.slipstream.core.Store
 
 /**
@@ -51,11 +64,31 @@ import dev.specflow.slipstream.core.Store
  * configurable on the desktop is configurable here and means the same thing.
  */
 @Composable
-fun ServersScreen(store: Store) {
+fun ServersScreen(
+    store: Store,
+    pendingLink: String? = null,
+    onPendingLinkConsumed: () -> Unit = {},
+) {
     val saved by store.state.collectAsState()
     var editing by remember { mutableStateOf<Profile?>(null) }
     var creating by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<Profile?>(null) }
+    var sharing by remember { mutableStateOf<Profile?>(null) }
+    var importing by remember { mutableStateOf(false) }
+    var importSeed by remember { mutableStateOf("") }
+
+    // A link the app was opened or re-opened with — a scanned QR, a link
+    // shared from elsewhere — opens the same dialog a manual paste would,
+    // pre-filled rather than auto-added: whatever handed us this text was
+    // outside the app's own control, so it still goes through one review
+    // and a tap before anything is saved.
+    LaunchedEffect(pendingLink) {
+        if (pendingLink != null) {
+            importSeed = pendingLink
+            importing = true
+            onPendingLinkConsumed()
+        }
+    }
 
     LazyColumn(
         Modifier.fillMaxWidth().padding(16.dp),
@@ -72,10 +105,20 @@ fun ServersScreen(store: Store) {
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Button(onClick = { creating = true }) {
-                    Icon(Icons.Filled.Add, contentDescription = null)
-                    Spacer(Modifier.fillMaxWidth(0f))
-                    Text("  Add")
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // Icon-only, to leave room on a phone-width header next to
+                    // the primary Add button — its own dialog explains itself.
+                    IconButton(onClick = { importSeed = ""; importing = true }) {
+                        Icon(Icons.Filled.Link, contentDescription = "Add from a link")
+                    }
+                    Button(onClick = { creating = true }) {
+                        Icon(Icons.Filled.Add, contentDescription = null)
+                        Spacer(Modifier.fillMaxWidth(0f))
+                        Text("  Add")
+                    }
                 }
             }
         }
@@ -104,6 +147,9 @@ fun ServersScreen(store: Store) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                    IconButton(onClick = { sharing = profile }) {
+                        Icon(Icons.Filled.Share, contentDescription = "Share")
                     }
                     IconButton(onClick = { editing = profile }) {
                         Icon(Icons.Filled.Edit, contentDescription = "Edit")
@@ -186,6 +232,145 @@ fun ServersScreen(store: Store) {
             dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Keep") } },
         )
     }
+
+    sharing?.let { profile ->
+        ShareDialog(profile, onDismiss = { sharing = null })
+    }
+
+    if (importing) {
+        ImportDialog(
+            existing = saved.profiles.map { it.name },
+            initialText = importSeed,
+            onDismiss = { importing = false; importSeed = "" },
+            onImport = { profile ->
+                store.edit { state ->
+                    state.copy(
+                        profiles = state.profiles + profile,
+                        activeProfile = state.activeProfile.ifBlank { profile.name },
+                    )
+                }
+                importing = false
+                importSeed = ""
+            },
+        )
+    }
+}
+
+/**
+ * A server, as a link and as the QR code of that link. Scanning it is
+ * whatever the device's own camera app already does with a URL — this app
+ * asks nothing of it beyond being registered for `slipstream://` links (see
+ * the manifest), so there is no camera permission or preview to get right
+ * here.
+ */
+@Composable
+private fun ShareDialog(profile: Profile, onDismiss: () -> Unit) {
+    val link = remember(profile) { ProfileShare.encode(profile) }
+    val qr = remember(link) { encodeQrCode(link).asImageBitmap() }
+    val clipboard = LocalClipboardManager.current
+    var copied by remember(profile) { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Share ${profile.name}") },
+        text = {
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // A plain white backing: a QR reader depends on real contrast
+                // between the modules, which a dark theme's own background
+                // does not reliably give it.
+                Column(
+                    Modifier
+                        .background(Color.White)
+                        .padding(12.dp),
+                ) {
+                    Image(qr, contentDescription = "QR code for $link", modifier = Modifier.size(240.dp))
+                }
+                Text(
+                    "Scan this with the phone's camera, or copy the link below. " +
+                        "It carries this server's settings only — never this device's own history or apps.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SelectionContainer {
+                    Text(
+                        link,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                clipboard.setText(AnnotatedString(link))
+                copied = true
+            }) { Text(if (copied) "Copied" else "Copy link") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+/**
+ * The other direction: a link typed, pasted, or lifted from a photo by
+ * whatever put it on the clipboard — this dialog only ever sees text.
+ */
+@Composable
+private fun ImportDialog(
+    existing: List<String>,
+    initialText: String = "",
+    onDismiss: () -> Unit,
+    onImport: (Profile) -> Unit,
+) {
+    var text by remember(initialText) { mutableStateOf(initialText) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add a server from a link") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Paste a slipstream:// link — from the desktop client's Share dialog, " +
+                        "or another copy of this app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    text,
+                    { text = it; error = null },
+                    label = { Text("Link") },
+                    placeholder = { Text("slipstream://p?v=1&d=…") },
+                    singleLine = false,
+                    minLines = 2,
+                    maxLines = 4,
+                )
+                if (error != null) {
+                    Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = text.isNotBlank(),
+                onClick = {
+                    ProfileShare.decode(text).fold(
+                        onSuccess = { decoded ->
+                            val named = decoded.profile.copy(
+                                name = uniqueName(existing, decoded.profile.name.ifBlank { "Server" }),
+                            )
+                            onImport(named)
+                        },
+                        onFailure = { error = it.message ?: "That link could not be read" },
+                    )
+                },
+            ) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 private fun uniqueName(taken: List<String>, base: String): String {

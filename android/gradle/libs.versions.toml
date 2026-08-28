@@ -7,8 +7,10 @@ activityCompose = "1.9.3"
 composeBom = "2024.12.01"
 serialization = "1.7.3"
 junit = "4.13.2"
+zxingCore = "3.5.3"
 
 [libraries]
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
 androidx-lifecycle-service = { group = "androidx.lifecycle", name = "lifecycle-service", version.ref = "lifecycle" }

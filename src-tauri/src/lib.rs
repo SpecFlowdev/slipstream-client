@@ -1,6 +1,7 @@
 mod config;
 mod meter;
 mod rules;
+mod share;
 mod sysproxy;
 mod traffic;
 mod tunnel;
@@ -29,6 +30,34 @@ fn save_profile(store: State<'_, Arc<Store>>, profile: Profile) -> Result<Profil
 #[tauri::command]
 fn delete_profile(store: State<'_, Arc<Store>>, id: String) -> Result<(), String> {
     store.delete_profile(&id)
+}
+
+/// Encodes a profile as a `slipstream://p?...` link, for the front end to
+/// render as a QR code or offer to copy.
+#[tauri::command]
+fn share_profile(store: State<'_, Arc<Store>>, id: String) -> Result<String, String> {
+    let profile = store
+        .profiles()
+        .into_iter()
+        .find(|p| p.id == id)
+        .ok_or_else(|| "No such profile".to_string())?;
+    Ok(share::encode(&profile))
+}
+
+#[derive(serde::Serialize)]
+struct ImportedProfile {
+    profile: Profile,
+    /// Set when the link carried more than a desktop profile can hold.
+    note: Option<String>,
+}
+
+/// Decodes a `slipstream://p?...` link — typed, pasted, or read from a QR
+/// image by the front end — and saves it as a new profile.
+#[tauri::command]
+fn import_profile(store: State<'_, Arc<Store>>, text: String) -> Result<ImportedProfile, String> {
+    let share::Decoded { profile, note } = share::decode(&text)?;
+    let saved = store.save_profile(profile)?;
+    Ok(ImportedProfile { profile: saved, note })
 }
 
 #[tauri::command]
@@ -304,6 +333,8 @@ pub fn run() {
             list_profiles,
             save_profile,
             delete_profile,
+            share_profile,
+            import_profile,
             get_settings,
             save_settings,
             get_status,

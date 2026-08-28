@@ -37,6 +37,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- A server shared as a QR code or a link opens straight into
+                 the import dialog, through whatever already reads a QR on
+                 this device — the system camera, Google Lens, another QR
+                 app — none of which this app has to be. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="slipstream" android:host="p" />
+            </intent-filter>
         </activity>
 
         <service

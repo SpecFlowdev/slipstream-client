@@ -35,6 +35,15 @@ export interface Profile {
   authoritative: string;
 }
 
+/** What `import_profile` hands back: the saved profile, and a note when the
+ * link carried more than a desktop profile can hold (Android allows several
+ * resolvers or authoritative addresses; this client keeps only the first of
+ * each). */
+export interface ImportedProfile {
+  profile: Profile;
+  note: string | null;
+}
+
 /** One live SOCKS5 connection, named from the request the relay forwarded. */
 export interface ConnectionRow {
   id: number;

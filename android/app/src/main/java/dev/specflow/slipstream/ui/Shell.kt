@@ -24,6 +24,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,9 +59,17 @@ fun Shell(
     refusedConsent: Boolean,
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
+    /** A `slipstream://p?...` link the activity was opened or re-opened with
+     * (a scanned QR, a shared link) — surfaced once, on the Servers tab. */
+    pendingLink: String? = null,
+    onPendingLinkConsumed: () -> Unit = {},
 ) {
     val saved by store.state.collectAsState()
     var tab by remember { mutableStateOf(Tab.HOME) }
+
+    LaunchedEffect(pendingLink) {
+        if (pendingLink != null) tab = Tab.SERVERS
+    }
 
     SlipstreamTheme(saved.settings.theme) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -109,7 +118,7 @@ fun Shell(
                 ) { current ->
                     when (current) {
                         Tab.HOME -> HomeScreen(store, refusedConsent, onConnect, onDisconnect)
-                        Tab.SERVERS -> ServersScreen(store)
+                        Tab.SERVERS -> ServersScreen(store, pendingLink, onPendingLinkConsumed)
                         Tab.TRAFFIC -> TrafficScreen()
                         Tab.RULES -> RulesScreen(store)
                         Tab.SETTINGS -> SettingsScreen(store)

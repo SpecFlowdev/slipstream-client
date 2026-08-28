@@ -246,6 +246,7 @@
         onEdit={(p) => (editing = p)}
         onSave={saveProfile}
         onDelete={removeProfile}
+        onImported={async (profile) => { await refreshProfiles(); selectedId = profile.id; }}
       />
     {:else if tab === "logs"}
       <Logs lines={logs} onClear={async () => { await ipc.clearLogs(); logs = []; }} />

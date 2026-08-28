@@ -1,8 +1,10 @@
 <script lang="ts">
   import { open } from "@tauri-apps/plugin-dialog";
+  import QRCode from "qrcode";
+  import jsQR from "jsqr";
   import type { Profile } from "../types";
   import { blankProfile } from "../types";
-  import { readCertFile } from "../ipc";
+  import { readCertFile, shareProfile, importProfile } from "../ipc";
   import { t } from "../i18n.svelte";
 
   interface Props {
@@ -11,9 +13,10 @@
     onEdit: (profile: Profile | null) => void;
     onSave: (profile: Profile) => Promise<string | null>;
     onDelete: (id: string) => void;
+    onImported: (profile: Profile) => void;
   }
 
-  let { profiles, editing, onEdit, onSave, onDelete }: Props = $props();
+  let { profiles, editing, onEdit, onSave, onDelete, onImported }: Props = $props();
 
   let draft = $state<Profile>(blankProfile());
   let error = $state<string | null>(null);
@@ -42,6 +45,94 @@
   async function submit(event: SubmitEvent) {
     event.preventDefault();
     error = await onSave({ ...draft, listenPort: Number(draft.listenPort) });
+  }
+
+  // — Share: turns a saved profile into a link, and a QR code of that link.
+  // The link carries the server's settings only, never this device's local
+  // port or SOCKS credentials — share.rs never puts them in it.
+  let sharing = $state<Profile | null>(null);
+  let shareLink = $state("");
+  let shareQr = $state("");
+  let shareCopied = $state(false);
+
+  async function openShare(profile: Profile) {
+    shareCopied = false;
+    shareQr = "";
+    shareLink = await shareProfile(profile.id);
+    sharing = profile;
+    // After the await above so the dialog itself appears without waiting on
+    // the (slightly slower) image encode.
+    shareQr = await QRCode.toDataURL(shareLink, { margin: 1, width: 288 });
+  }
+
+  function closeShare() {
+    sharing = null;
+  }
+
+  async function copyShareLink() {
+    await navigator.clipboard.writeText(shareLink);
+    shareCopied = true;
+  }
+
+  // — Import: the other direction. A link can be typed, pasted, or lifted out
+  // of a photograph of a QR code — this client has no camera flow of its own,
+  // so a picture is the practical way to bring in a code shown on a phone.
+  let importing = $state(false);
+  let importText = $state("");
+  let importError = $state<string | null>(null);
+  let importResult = $state<{ profile: Profile; note: string | null } | null>(null);
+  let importBusy = $state(false);
+
+  function openImport() {
+    importText = "";
+    importError = null;
+    importResult = null;
+    importing = true;
+  }
+
+  function closeImport() {
+    importing = false;
+  }
+
+  async function submitImport() {
+    if (!importText.trim()) return;
+    importBusy = true;
+    importError = null;
+    try {
+      const result = await importProfile(importText.trim());
+      importResult = result;
+      onImported(result.profile);
+    } catch (err) {
+      importError = String(err);
+    } finally {
+      importBusy = false;
+    }
+  }
+
+  async function decodeImage(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    importError = null;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas is unavailable");
+      ctx.drawImage(bitmap, 0, 0);
+      const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const found = jsQR(image.data, image.width, image.height);
+      if (!found) {
+        importError = t("profiles.importNoCode");
+        return;
+      }
+      importText = found.data;
+    } catch (err) {
+      importError = String(err);
+    }
   }
 </script>
 
@@ -149,7 +240,10 @@
   <div class="list">
     <div class="list-head">
       <h2>{t("profiles.title")}</h2>
-      <button class="primary small" onclick={() => onEdit(blankProfile())}>{t("profiles.add")}</button>
+      <div class="list-head-actions">
+        <button class="ghost small" onclick={openImport}>{t("profiles.import")}</button>
+        <button class="primary small" onclick={() => onEdit(blankProfile())}>{t("profiles.add")}</button>
+      </div>
     </div>
 
     {#if profiles.length === 0}
@@ -166,6 +260,7 @@
             </span>
           </div>
           <div class="item-actions">
+            <button class="ghost" onclick={() => openShare(profile)}>{t("profiles.share")}</button>
             <button class="ghost" onclick={() => onEdit(profile)}>{t("profiles.edit")}</button>
             {#if confirmingDelete === profile.id}
               <button class="ghost destructive" onclick={() => { onDelete(profile.id); confirmingDelete = null; }}>
@@ -180,6 +275,90 @@
         </div>
       {/each}
     {/if}
+  </div>
+{/if}
+
+{#if sharing}
+  <div class="overlay" role="presentation" onclick={closeShare}>
+    <div
+      class="card dialog"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.key === "Escape" && closeShare()}
+    >
+      <h2>{t("profiles.shareTitle")}</h2>
+      <p class="dialog-name">{sharing.name}</p>
+      <div class="qr-box">
+        {#if shareQr}
+          <img src={shareQr} alt={t("profiles.shareTitle")} width="288" height="288" />
+        {:else}
+          <div class="qr-placeholder"></div>
+        {/if}
+      </div>
+      <small>{t("profiles.shareHint")}</small>
+      <div class="link-row">
+        <code class="link-text">{shareLink}</code>
+        <button type="button" class="ghost" onclick={copyShareLink}>
+          {shareCopied ? t("profiles.shareCopied") : t("profiles.shareCopy")}
+        </button>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary" onclick={closeShare}>{t("profiles.shareClose")}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if importing}
+  <div class="overlay" role="presentation" onclick={closeImport}>
+    <div
+      class="card dialog"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.key === "Escape" && closeImport()}
+    >
+      {#if importResult}
+        <h2>{t("profiles.importSuccess")}</h2>
+        <p class="dialog-name">{importResult.profile.name}</p>
+        {#if importResult.note}
+          <p class="note">{importResult.note}</p>
+        {/if}
+        <div class="actions">
+          <button type="button" class="primary" onclick={closeImport}>{t("profiles.importDone")}</button>
+        </div>
+      {:else}
+        <h2>{t("profiles.importTitle")}</h2>
+        <small>{t("profiles.importHint")}</small>
+        <textarea
+          bind:value={importText}
+          placeholder={t("profiles.importPlaceholder")}
+          spellcheck="false"
+          rows="3"
+        ></textarea>
+        <label class="pick-image">
+          <span class="ghost as-label">{t("profiles.importFromImage")}</span>
+          <input type="file" accept="image/*" onchange={decodeImage} />
+        </label>
+        {#if importError}
+          <p class="error">{importError}</p>
+        {/if}
+        <div class="actions">
+          <button type="button" class="ghost" onclick={closeImport}>{t("profiles.importCancel")}</button>
+          <button
+            type="button"
+            class="primary"
+            disabled={importBusy || !importText.trim()}
+            onclick={submitImport}
+          >
+            {t("profiles.importSubmit")}
+          </button>
+        </div>
+      {/if}
+    </div>
   </div>
 {/if}
 
@@ -457,4 +636,121 @@
   }
 
   .link:hover { color: var(--text); }
+
+  .list-head-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .ghost.small {
+    padding: 7px 13px;
+    font-size: 13px;
+  }
+
+  /* Share and import share one dialog chrome: a dimmed backdrop and a card
+     centred over it, dismissible by clicking outside. */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 20;
+  }
+
+  .dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 22px;
+    width: min(360px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .dialog h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .dialog-name {
+    margin: -6px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .qr-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+  }
+
+  .qr-box img {
+    display: block;
+    width: 100%;
+    max-width: 288px;
+    height: auto;
+  }
+
+  .qr-placeholder {
+    width: 288px;
+    max-width: 100%;
+    aspect-ratio: 1;
+  }
+
+  .link-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .link-text {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-inset);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .note {
+    margin: 0;
+    padding: 9px 11px;
+    border-radius: var(--radius-sm);
+    background: var(--accent-soft);
+    color: var(--text);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+
+  .pick-image {
+    display: block;
+  }
+
+  .pick-image .as-label {
+    display: inline-block;
+    cursor: pointer;
+  }
+
+  /* The native file input is unstyleable and redundant next to the ghost
+     button standing in for it, so it takes no space of its own — the label
+     wrapping it still forwards clicks and keyboard activation to it. */
+  .pick-image input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
 </style>

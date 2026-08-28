@@ -40,6 +40,11 @@ falls back to TCP, which is why pages still load.
 
 - **Servers** — every flag the tunnel takes: domain, recursive resolvers,
   authoritative addresses, congestion control, keep-alive, certificate pinning
+- **Share by QR or link** — a server becomes a `slipstream://` link and a QR
+  code; scanning it with whatever camera app is already on the device opens
+  this one straight to the import screen, and the same link can be typed or
+  pasted from the desktop client's own Share dialog. It carries the server's
+  settings only — never this device's local state
 - **Live numbers** — download and upload rate over the last minute, totals,
   peaks, open connections, busiest destinations, and every connection as it
   happens

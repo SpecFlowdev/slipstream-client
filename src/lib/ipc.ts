@@ -1,10 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { LogLine, Profile, Rule, SessionRecord, Settings, Status } from "./types";
+import type { ImportedProfile, LogLine, Profile, Rule, SessionRecord, Settings, Status } from "./types";
 
 export const listProfiles = () => invoke<Profile[]>("list_profiles");
 export const saveProfile = (profile: Profile) => invoke<Profile>("save_profile", { profile });
 export const deleteProfile = (id: string) => invoke<void>("delete_profile", { id });
+
+/** Encodes a profile as a `slipstream://p?...` link, to show as a QR code or copy. */
+export const shareProfile = (id: string) => invoke<string>("share_profile", { id });
+/** Decodes a link — typed, pasted, or read from a scanned QR image — and saves it as a new profile. */
+export const importProfile = (text: string) => invoke<ImportedProfile>("import_profile", { text });
 
 export const connect = (profileId: string) => invoke<void>("connect", { profileId });
 export const disconnect = () => invoke<void>("disconnect");

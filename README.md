@@ -170,6 +170,8 @@ Values are validated against what the binary actually accepts, so a bad setting 
 
 The certificate is optional but worth setting. Without it the server is not verified at all, so anyone able to answer your DNS queries can impersonate it — and would receive the proxy password your client sends.
 
+**Already set one up somewhere else?** Every server has a **Share** button that turns it into a `slipstream://` link and a QR code — scan it with the [Android client](android/), or paste the link into either client's **Add from a link** dialog. The link carries the domain, resolver, certificate and tuning; it never carries this device's local port or proxy credentials, so it is safe to show on screen or send through a chat app.
+
 ---
 
 ## System-wide traffic, and what "not a TUN device" means
@@ -240,7 +242,6 @@ The tray still works normally on Windows, where "close to tray" appears in Setti
 
 - A userspace network stack in front of a TUN device, for capture that does not depend on applications honouring the proxy setting
 - Android releases published alongside the desktop ones, signed rather than debug-built
-- Profile import and export by link or QR
 - Per-destination history kept across sessions, opt-in
 
 ---
