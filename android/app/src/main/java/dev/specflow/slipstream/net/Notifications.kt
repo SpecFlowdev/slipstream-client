@@ -41,7 +41,24 @@ object Notifications {
         )
     }
 
-    fun foreground(service: Service, status: TunnelService.Status) {
+    /**
+     * Posts or updates the foreground notification. Returns false rather than
+     * throwing on failure — Android's rules for what a foreground service is
+     * allowed to do have only grown stricter release over release, and a
+     * caller three layers up should never have this specific call take the
+     * whole app down with it. [TunnelService] treats a false from the very
+     * first call as a real failure to report; every later call is a
+     * best-effort content update, and ignores it.
+     */
+    fun foreground(service: Service, status: TunnelService.Status): Boolean = try {
+        postForeground(service, status)
+        true
+    } catch (e: Exception) {
+        android.util.Log.e("SlipstreamNotifications", "could not post the foreground notification", e)
+        false
+    }
+
+    private fun postForeground(service: Service, status: TunnelService.Status) {
         ensureChannel(service)
         val open = PendingIntent.getActivity(
             service, 0,

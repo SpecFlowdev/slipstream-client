@@ -123,7 +123,17 @@ class TunnelService : VpnService() {
         }
 
         state.value = Status(phase = Phase.STARTING, profileName = profile.name)
-        Notifications.foreground(this, state.value)
+        // A foreground service that never calls startForeground() gets killed
+        // by the system, so this has to happen before anything else can — and
+        // it is the one call in this whole path that reaches into Android's
+        // own service-lifecycle enforcement, which has grown stricter every
+        // release. Notifications.foreground() never throws (it reports
+        // failure instead of raising it) precisely so a rejection here is a
+        // clear message to the user, not a crash.
+        if (!Notifications.foreground(this, state.value)) {
+            fail("Android would not let this run as a foreground service")
+            return
+        }
 
         val work = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         scope = work
@@ -352,7 +362,7 @@ class TunnelService : VpnService() {
         teardownBlocking()
         state.value = Status(phase = Phase.OFF, message = reason)
         Notifications.clear(this)
-        stopForeground(true)
+        stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 

@@ -33,7 +33,15 @@ class Bridge {
         val available: Boolean = try {
             System.loadLibrary("hev-socks5-tunnel")
             true
-        } catch (_: UnsatisfiedLinkError) {
+        } catch (e: Throwable) {
+            // UnsatisfiedLinkError (missing library, wrong ABI, an unresolved
+            // symbol) is the expected shape of "not available," but this is
+            // deliberately caught broader than that: a native library load is
+            // one of the few JVM operations that can also throw a bare Error
+            // outside that hierarchy depending on the device and Android
+            // version, and every one of those cases means the same thing —
+            // no tunnel on this device — not a reason to crash on Connect.
+            android.util.Log.e("SlipstreamBridge", "packet bridge library did not load", e)
             false
         }
     }

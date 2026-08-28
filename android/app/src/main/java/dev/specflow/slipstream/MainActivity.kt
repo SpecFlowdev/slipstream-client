@@ -11,8 +11,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.view.WindowCompat
+import dev.specflow.slipstream.core.CrashLog
 import dev.specflow.slipstream.core.Store
 import dev.specflow.slipstream.net.TunnelService
+import dev.specflow.slipstream.ui.CrashReportOverlay
 import dev.specflow.slipstream.ui.Shell
 
 class MainActivity : ComponentActivity() {
@@ -53,6 +55,11 @@ class MainActivity : ComponentActivity() {
         pendingLink = linkFrom(intent)
 
         val store = Store.of(this)
+        // Read once, up front: whatever the last run left behind is fixed for
+        // the life of this screen, so dismissing it does not have to race a
+        // second write to the same file.
+        var crashReport by mutableStateOf(CrashLog.pending(this))
+
         setContent {
             Shell(
                 store = store,
@@ -62,6 +69,16 @@ class MainActivity : ComponentActivity() {
                 pendingLink = pendingLink,
                 onPendingLinkConsumed = { pendingLink = null },
             )
+            val report = crashReport
+            if (report != null) {
+                CrashReportOverlay(
+                    report = report,
+                    onDismiss = {
+                        CrashLog.clear(this)
+                        crashReport = null
+                    },
+                )
+            }
         }
     }
 
