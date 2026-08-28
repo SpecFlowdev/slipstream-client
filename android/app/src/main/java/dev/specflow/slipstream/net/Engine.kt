@@ -30,6 +30,15 @@ class Engine(private val context: Context) {
     @Volatile
     var onDied: ((String) -> Unit)? = null
 
+    /**
+     * Fired for every line the tunnel writes, after the same ANSI-stripping
+     * and level-splitting the desktop client applies to the identical
+     * output. Only the tunnel's own lines are parsed for state — the packet
+     * bridge speaks through the JNI calls in Bridge.kt, not stdout.
+     */
+    @Volatile
+    var onTunnelLine: ((level: String, message: String) -> Unit)? = null
+
     fun log(): List<String> = synchronized(lines) { lines.toList() }
 
     fun clearLog() = synchronized(lines) { lines.clear() }
@@ -116,7 +125,13 @@ class Engine(private val context: Context) {
             .start()
         thread(isDaemon = true, name = "engine-$label") {
             try {
-                process.inputStream.bufferedReader().forEachLineSafely { record("[$label] $it") }
+                process.inputStream.bufferedReader().forEachLineSafely { raw ->
+                    record("[$label] $raw")
+                    if (label == "tunnel") {
+                        val (level, message) = parseLogLine(raw)
+                        onTunnelLine?.invoke(level, message)
+                    }
+                }
             } catch (_: IOException) {
             }
             val code = runCatching { process.waitFor() }.getOrDefault(-1)
@@ -126,6 +141,40 @@ class Engine(private val context: Context) {
             onDied?.invoke("$label exited with $code")
         }
         return process
+    }
+
+    /**
+     * Mirrors the desktop client's `parse_log`: strips ANSI colour codes,
+     * then splits a leading level word off the front. Anything without one
+     * is treated as info, same as there.
+     */
+    private fun parseLogLine(raw: String): Pair<String, String> {
+        val stripped = stripAnsi(raw)
+        val trimmed = stripped.trim()
+        for (level in listOf("TRACE", "DEBUG", "INFO", "WARN", "ERROR")) {
+            if (trimmed.startsWith(level)) {
+                return level.lowercase() to trimmed.removePrefix(level).trim()
+            }
+        }
+        return "info" to trimmed
+    }
+
+    private fun stripAnsi(input: String): String {
+        val out = StringBuilder(input.length)
+        var i = 0
+        while (i < input.length) {
+            val c = input[i]
+            if (c != '\u001B') {
+                out.append(c)
+                i++
+                continue
+            }
+            // Drop the escape sequence up to and including its final byte.
+            i++
+            while (i < input.length && !input[i].isLetter()) i++
+            if (i < input.length) i++
+        }
+        return out.toString()
     }
 
     private inline fun BufferedReader.forEachLineSafely(action: (String) -> Unit) {

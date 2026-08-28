@@ -54,18 +54,22 @@ object Notifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val title = when (status.phase) {
-            TunnelService.Phase.ON -> status.profileName.ifBlank { "Connected" }
-            TunnelService.Phase.STARTING -> "Connecting…"
-            TunnelService.Phase.STOPPING -> "Disconnecting…"
-            TunnelService.Phase.FAILED -> "Disconnected"
-            TunnelService.Phase.OFF -> "Off"
+        val title = when {
+            status.phase == TunnelService.Phase.ON && status.waitingForNetwork -> "Waiting for a network…"
+            status.phase == TunnelService.Phase.ON && status.reconnecting -> "Reconnecting…"
+            status.phase == TunnelService.Phase.ON -> status.profileName.ifBlank { "Connected" }
+            status.phase == TunnelService.Phase.STARTING -> "Connecting…"
+            status.phase == TunnelService.Phase.STOPPING -> "Disconnecting…"
+            status.phase == TunnelService.Phase.FAILED -> "Disconnected"
+            else -> "Off"
         }
-        val text = when (status.phase) {
-            TunnelService.Phase.ON ->
+        val text = when {
+            status.phase == TunnelService.Phase.ON && status.waitingForNetwork ->
+                "No network right now; the session will pick back up when one returns"
+            status.phase == TunnelService.Phase.ON ->
                 "↓ ${formatRate(status.rateDown)}   ↑ ${formatRate(status.rateUp)}   " +
                     "${formatBytes(status.bytesUp + status.bytesDown)} total"
-            TunnelService.Phase.FAILED -> status.message
+            status.phase == TunnelService.Phase.FAILED -> status.message
             else -> status.message.ifBlank { " " }
         }
 

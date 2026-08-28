@@ -72,7 +72,7 @@ fun HomeScreen(
         )
 
         Text(
-            phaseLabel(status.phase),
+            phaseLabel(status),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.fillMaxWidth(),

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.util.Log
 import dev.specflow.slipstream.core.Profile
 import dev.specflow.slipstream.core.RuleSet
@@ -62,6 +63,10 @@ class TunnelService : VpnService() {
         val opened: Long = 0,
         val blocked: Long = 0,
         val message: String = "",
+        /** The tunnel is up but its own connection is cycling right now. */
+        val reconnecting: Boolean = false,
+        /** There is no network at all; nothing client-side can fix this. */
+        val waitingForNetwork: Boolean = false,
     ) {
         val seconds: Long get() = if (since == 0L) 0 else (System.currentTimeMillis() - since) / 1000
     }
@@ -74,6 +79,8 @@ class TunnelService : VpnService() {
 
     private var scope: CoroutineScope? = null
     private var ticker: Job? = null
+    private var network: NetworkWatcher? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -164,9 +171,63 @@ class TunnelService : VpnService() {
             }
         }
 
+        // Mirrors the desktop client's own log-driven state: the tunnel
+        // reports its QUIC session cycling without dying, and that is worth
+        // showing rather than leaving the interface saying "Connected" over
+        // a session that is not currently carrying anything.
+        engine.onTunnelLine = { _, message ->
+            if (state.value.phase == Phase.ON) {
+                when {
+                    message.contains("Connection ready") ->
+                        state.value = state.value.copy(reconnecting = false)
+                    message.contains("Connection closed; reconnecting") ->
+                        state.value = state.value.copy(reconnecting = true)
+                }
+            }
+        }
+
+        // A full loss of connectivity is a problem no amount of the tunnel's
+        // own retrying can solve, and Doze can suspend the subprocess without
+        // killing it, leaving a session that looks alive and answers nothing.
+        // Both are phone-specific: a desktop's network rarely disappears and
+        // is never suspended out from under a running process.
+        network = NetworkWatcher(
+            context = this,
+            onRecovered = {
+                state.value = state.value.copy(waitingForNetwork = false)
+                if (settings.autoReconnect && state.value.phase == Phase.ON) {
+                    Log.i(TAG, "restarting after a network outage")
+                    restart()
+                }
+            },
+            onOutage = {
+                if (state.value.phase == Phase.ON) {
+                    state.value = state.value.copy(waitingForNetwork = true)
+                    Notifications.foreground(this, state.value)
+                }
+            },
+        ).also { it.start() }
+
+        // A partial wake lock keeps the CPU from suspending the session
+        // outright while connected. It is re-acquired on every tick rather
+        // than held without end, so a missed release path times out instead
+        // of becoming a permanent drain.
+        acquireWakeLock()
+
         state.value = state.value.copy(phase = Phase.ON, since = System.currentTimeMillis())
         Notifications.foreground(this, state.value)
         startTicking(server)
+    }
+
+    private fun acquireWakeLock() {
+        val manager = getSystemService(PowerManager::class.java) ?: return
+        runCatching {
+            wakeLock?.let { if (it.isHeld) it.release() }
+            val lock = manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:tunnel")
+            lock.setReferenceCounted(false)
+            lock.acquire(WAKELOCK_TIMEOUT_MS)
+            wakeLock = lock
+        }.onFailure { Log.w(TAG, "could not acquire a wake lock", it) }
     }
 
     private fun buildInterface(settings: dev.specflow.slipstream.core.Settings): ParcelFileDescriptor? {
@@ -230,8 +291,17 @@ class TunnelService : VpnService() {
         ticker = scope?.launch {
             var lastUp = 0L
             var lastDown = 0L
+            var tick = 0
             while (true) {
                 delay(1000)
+                tick++
+                // The wake lock is timed rather than held forever, as a
+                // failsafe against a missed release; renewing it here keeps a
+                // long session from having it silently expire out from under
+                // it.
+                if (tick % WAKELOCK_RENEW_TICKS == 0) {
+                    runCatching { wakeLock?.acquire(WAKELOCK_TIMEOUT_MS) }
+                }
                 val registry = server.registry
                 val up = registry.bytesUp()
                 val down = registry.bytesDown()
@@ -310,6 +380,11 @@ class TunnelService : VpnService() {
     private fun teardown() {
         ticker?.cancel()
         ticker = null
+        network?.stop()
+        network = null
+        wakeLock?.let { runCatching { if (it.isHeld) it.release() } }
+        wakeLock = null
+        engine.onTunnelLine = null
         engine.stop()
         proxy?.stop()
         proxy = null
@@ -338,6 +413,14 @@ class TunnelService : VpnService() {
         private const val SETTLE_MS = 400L
         private const val RECONNECT_MS = 1500L
         private const val SAMPLES = 60
+
+        /**
+         * A failsafe, not a target: this is far longer than any session
+         * should go without the ticker renewing it, so its only real job is
+         * to bound the damage if a code path ever fails to release it.
+         */
+        private const val WAKELOCK_TIMEOUT_MS = 10 * 60_000L
+        private const val WAKELOCK_RENEW_TICKS = 60
 
         val state = MutableStateFlow(Status())
         val samples = MutableStateFlow<List<Sample>>(emptyList())

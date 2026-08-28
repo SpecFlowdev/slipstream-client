@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- A short partial wake lock while connected, so Doze cannot suspend
+         the tunnel subprocess out from under a session that looks alive. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Listing installed apps is what the per-app routing screen is for.
          Without it the screen would show only this app on API 30 and above. -->

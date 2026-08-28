@@ -155,10 +155,12 @@ private fun Wallpaper(path: String, dim: Int, blur: Int) {
 }
 
 /** Shared by several screens, so the phase-to-words mapping stays in one place. */
-fun phaseLabel(phase: TunnelService.Phase): String = when (phase) {
-    TunnelService.Phase.OFF -> "Not connected"
-    TunnelService.Phase.STARTING -> "Connecting"
-    TunnelService.Phase.ON -> "Connected"
-    TunnelService.Phase.STOPPING -> "Disconnecting"
-    TunnelService.Phase.FAILED -> "Failed"
+fun phaseLabel(status: TunnelService.Status): String = when {
+    status.phase == TunnelService.Phase.ON && status.waitingForNetwork -> "Waiting for a network"
+    status.phase == TunnelService.Phase.ON && status.reconnecting -> "Reconnecting"
+    status.phase == TunnelService.Phase.OFF -> "Not connected"
+    status.phase == TunnelService.Phase.STARTING -> "Connecting"
+    status.phase == TunnelService.Phase.ON -> "Connected"
+    status.phase == TunnelService.Phase.STOPPING -> "Disconnecting"
+    status.phase == TunnelService.Phase.FAILED -> "Failed"
 }
