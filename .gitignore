@@ -10,3 +10,14 @@ src-tauri/binaries/
 *.local
 .idea/
 .vscode/
+
+# Legacy files from old build system (replaced by Tauri app)
+android/app/
+android/build-native.sh
+android/.slipstream-rust/
+client/
+packaging/
+scripts/
+README.fa.md
+README.zh.md
+docs/
